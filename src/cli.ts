@@ -3,6 +3,7 @@
  */
 import * as os from 'node:os'
 import * as path from 'node:path'
+import { exec } from 'node:child_process'
 import { DshAdapter } from './adapters/dsh.js'
 import { aggregate } from './stats/index.js'
 import { writeJsonReport, localDateKey } from './report/json.js'
@@ -228,9 +229,15 @@ export async function runCli(argv: string[]): Promise<number> {
   // ---------- 落盘 ----------
   if (!opts.json) {
     const htmlPath = await writeHtmlReport(report, outputDir)
-    console.log(`📄 报告已保存: ${htmlPath}`)
+    const absHtml = path.resolve(htmlPath)
+    console.log(`📄 报告已保存: ${absHtml}`)
+    // 自动用默认浏览器打开 HTML 报告
+    const openCmd = process.platform === 'win32' ? 'start ""' : process.platform === 'darwin' ? 'open' : 'xdg-open'
+    exec(`${openCmd} "${absHtml}"`, (err) => {
+      if (err) console.error(`⚠ 无法自动打开浏览器: ${err.message}`)
+    })
   }
   const jsonPath = await writeJsonReport(report, outputDir)
-  console.log(`📋 JSON 数据:   ${jsonPath}`)
+  console.log(`📋 JSON 数据:   ${path.resolve(jsonPath)}`)
   return 0
 }
