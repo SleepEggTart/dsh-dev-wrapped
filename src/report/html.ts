@@ -1,0 +1,310 @@
+/**
+ * HTML 报告卡片生成
+ *
+ * 单 HTML 文件、零外部依赖、深色蓝紫渐变背景、系统中文字体栈。
+ * 布局：标题 + 时间范围 → 4 个核心大数字 → 工具排行（纯 CSS 横向条形图 TOP8）
+ *       → 24h 活跃分布（纯 CSS 柱状）→ 亮点卡片 → topSessions → 底部署名。
+ * 响应式（手机/桌面均美观）；数字用 toLocaleString()。
+ */
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
+import type { DevWrappedReport } from '../types.js'
+import { localDateKey, reportBaseName } from './json.js'
+
+/** HTML 转义（数据中的工具名、路径等不可信文本） */
+function esc(s: string): string {
+  return s
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+/** 数字本地化格式 */
+function fmt(n: number): string {
+  return n.toLocaleString('zh-CN')
+}
+
+/** 时长人性化：天/时/分 */
+function fmtDuration(ms: number): string {
+  if (ms <= 0) return '—'
+  const minutes = Math.floor(ms / 60_000)
+  if (minutes < 1) return '< 1 分钟'
+  const days = Math.floor(minutes / 1440)
+  const hours = Math.floor((minutes % 1440) / 60)
+  const mins = minutes % 60
+  const parts: string[] = []
+  if (days > 0) parts.push(`${days} 天`)
+  if (hours > 0) parts.push(`${hours} 小时`)
+  if (mins > 0 && days === 0) parts.push(`${mins} 分钟`)
+  return parts.slice(0, 2).join(' ') || `${mins} 分钟`
+}
+
+/** token 数值友好化（万级缩写） */
+function fmtTokens(n: number): string {
+  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(2)} 亿`
+  if (n >= 10_000) return `${(n / 10_000).toFixed(1)} 万`
+  return fmt(n)
+}
+
+/** 时间戳 → 'YYYY-MM-DD HH:mm' */
+function fmtDateTime(time: number): string {
+  const d = new Date(time)
+  const p = (v: number) => String(v).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+/** 工具排行 TOP8 横向条形图 */
+function renderToolBars(report: DevWrappedReport): string {
+  const top = report.toolUsage.slice(0, 8)
+  if (top.length === 0) return '<p class="empty">暂无工具调用数据</p>'
+  const max = top[0].count
+  return top
+    .map(
+      (t, i) => `
+        <div class="bar-row">
+          <span class="bar-rank">${i + 1}</span>
+          <span class="bar-name" title="${esc(t.name)}">${esc(t.name)}</span>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:${Math.max(4, Math.round((t.count / max) * 100))}%"></div>
+          </div>
+          <span class="bar-count">${fmt(t.count)}</span>
+          <span class="bar-cat">${esc(t.category)}</span>
+        </div>`,
+    )
+    .join('')
+}
+
+/** 24 小时活跃分布柱状图 */
+function renderHourly(report: DevWrappedReport): string {
+  const max = Math.max(...report.timeline.hourlyActivity, 1)
+  const peak = report.timeline.peakHour
+  const bars = report.timeline.hourlyActivity
+    .map((c, h) => {
+      const height = Math.round((c / max) * 100)
+      const cls = c === 0 ? 'hour-bar empty' : h === peak ? 'hour-bar peak' : 'hour-bar'
+      return `<div class="hour-cell"><div class="${cls}" style="height:${Math.max(height, 3)}%"></div><span class="hour-label">${h}</span></div>`
+    })
+    .join('')
+  const peakText = peak !== null ? `高峰时段 ${String(peak).padStart(2, '0')}:00` : '无数据'
+  return `<div class="hours-head"><span>24 小时活跃分布</span><span class="hours-peak">${peakText}</span></div><div class="hours">${bars}</div>`
+}
+
+/** 亮点卡片 */
+function renderHighlights(report: DevWrappedReport): string {
+  const { highlights } = report
+  const cards: string[] = []
+
+  // 最爱工具
+  cards.push(
+    `<div class="hl-card"><div class="hl-icon">🛠️</div><div class="hl-label">最爱工具</div><div class="hl-value">${highlights.favoriteTool ? esc(highlights.favoriteTool) : '—'}</div></div>`,
+  )
+  // 最爱项目
+  const ws = highlights.favoriteWorkspace
+  cards.push(
+    `<div class="hl-card"><div class="hl-icon">📁</div><div class="hl-label">最爱项目</div><div class="hl-value small" title="${ws ? esc(ws) : ''}">${ws ? esc(ws) : '—'}</div></div>`,
+  )
+  // 最长会话
+  const ls = highlights.longestSession
+  cards.push(
+    `<div class="hl-card"><div class="hl-icon">⏱️</div><div class="hl-label">最长会话</div><div class="hl-value">${ls ? fmtDuration(ls.durationMs) : '—'}</div><div class="hl-sub">${ls ? `${fmt(ls.toolCalls)} 次工具调用 · ${ls.turns} 轮` : ''}</div></div>`,
+  )
+  // 最复杂任务
+  const mc = highlights.mostComplexTask
+  cards.push(
+    `<div class="hl-card"><div class="hl-icon">🧩</div><div class="hl-label">最复杂任务</div><div class="hl-value">${mc ? `${fmt(mc.totalSteps)} 步` : '—'}</div><div class="hl-sub">${mc ? `${mc.uniqueTools.length} 种工具` : ''}</div></div>`,
+  )
+  return cards.join('')
+}
+
+/** 热门会话列表 */
+function renderTopSessions(report: DevWrappedReport): string {
+  if (report.topSessions.length === 0) return ''
+  const rows = report.topSessions
+    .map((s, i) => {
+      const ws = esc(s.workspace)
+      const tools = s.topTools.map((t) => `<code>${esc(t)}</code>`).join(' ')
+      return `<tr><td class="rank">${i + 1}</td><td class="ws" title="${ws}">${ws}</td><td>${fmtDateTime(s.createdAt)}</td><td class="num">${fmt(s.turns)}</td><td class="num">${fmt(s.toolCalls)}</td><td class="tools">${tools}</td></tr>`
+    })
+    .join('')
+  return `
+    <section class="card">
+      <h2>🏆 热门会话 TOP5</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>#</th><th>项目</th><th>开始时间</th><th>轮次</th><th>工具调用</th><th>常用工具</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    </section>`
+}
+
+/** 生成完整 HTML 报告 */
+export function toHtmlReport(report: DevWrappedReport): string {
+  const { overview, timeline, fileOps } = report
+  const startDate = localDateKey(report.timeRange.start)
+  const endDate = localDateKey(report.timeRange.end)
+  const tokens = overview.tokens
+  const tokenText = tokens
+    ? `${fmtTokens(tokens.input)} 输入 / ${fmtTokens(tokens.output)} 输出`
+    : '部分会话缺少用量记录'
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DSH Dev Wrapped</title>
+<style>
+  :root {
+    --bg1: #0f0c29; --bg2: #302b63; --bg3: #24243e;
+    --card: rgba(255,255,255,.06);
+    --card-border: rgba(255,255,255,.12);
+    --text: #f0efff; --muted: #a5a3c9;
+    --accent: #8b7cf8; --accent2: #6ee7ff;
+    --bar: linear-gradient(90deg, #8b7cf8, #6ee7ff);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    background: linear-gradient(135deg, var(--bg1) 0%, var(--bg2) 50%, var(--bg3) 100%);
+    color: var(--text); min-height: 100vh; padding: 32px 16px 48px;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 28px; }
+  header h1 {
+    font-size: clamp(1.8rem, 5vw, 2.6rem); font-weight: 800; letter-spacing: 1px;
+    background: linear-gradient(90deg, #a78bfa, #6ee7ff);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  header .range { color: var(--muted); margin-top: 8px; font-size: .95rem; }
+  header .range b { color: var(--text); }
+
+  .grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 22px; }
+  .stat { background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 20px 12px; text-align: center; }
+  .stat .num { font-size: clamp(1.6rem, 4.5vw, 2.2rem); font-weight: 800; color: var(--accent2); }
+  .stat .label { color: var(--muted); margin-top: 6px; font-size: .85rem; }
+
+  .card { background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 22px; margin-bottom: 22px; }
+  .card h2 { font-size: 1.05rem; margin-bottom: 16px; color: var(--text); }
+  .card h2 .sub { color: var(--muted); font-weight: 400; font-size: .85rem; margin-left: 8px; }
+
+  .bar-row { display: grid; grid-template-columns: 22px 130px 1fr 64px; grid-template-rows: auto auto; column-gap: 10px; row-gap: 2px; align-items: center; margin-bottom: 10px; font-size: .9rem; }
+  .bar-rank { color: var(--muted); text-align: center; }
+  .bar-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-track { grid-column: 3; }
+  .bar-fill { height: 12px; border-radius: 6px; background: var(--bar); min-width: 6px; transition: width .4s ease; }
+  .bar-count { text-align: right; color: var(--accent2); font-variant-numeric: tabular-nums; }
+  .bar-cat { grid-column: 1 / -1; grid-row: 2; font-size: .72rem; color: var(--muted); padding-left: 32px; }
+
+  .hours-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
+  .hours-head span:first-child { font-size: 1.05rem; }
+  .hours-peak { color: var(--accent2); font-size: .85rem; }
+  .hours { display: grid; grid-template-columns: repeat(24, 1fr); gap: 4px; height: 110px; align-items: end; }
+  .hour-cell { display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
+  .hour-bar { width: 100%; border-radius: 3px 3px 0 0; background: linear-gradient(180deg, #8b7cf8, #4c46a0); min-height: 3px; }
+  .hour-bar.peak { background: linear-gradient(180deg, #6ee7ff, #8b7cf8); box-shadow: 0 0 10px rgba(110,231,255,.5); }
+  .hour-bar.empty { background: rgba(255,255,255,.08); }
+  .hour-label { font-size: .58rem; color: var(--muted); margin-top: 4px; }
+
+  .hl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+  .hl-card { background: rgba(255,255,255,.04); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px; text-align: center; }
+  .hl-icon { font-size: 1.6rem; margin-bottom: 8px; }
+  .hl-label { color: var(--muted); font-size: .8rem; margin-bottom: 6px; }
+  .hl-value { font-size: 1.15rem; font-weight: 700; color: var(--accent2); word-break: break-all; }
+  .hl-value.small { font-size: .85rem; }
+  .hl-sub { color: var(--muted); font-size: .75rem; margin-top: 6px; }
+
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+  .meta-item { display: flex; justify-content: space-between; padding: 10px 14px; background: rgba(255,255,255,.04); border-radius: 10px; font-size: .88rem; }
+  .meta-item .k { color: var(--muted); }
+  .meta-item .v { font-weight: 600; }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,.08); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; font-size: .78rem; }
+  td.rank { color: var(--muted); }
+  td.ws { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--accent2); }
+  td.tools code { background: rgba(139,124,248,.18); border-radius: 4px; padding: 2px 6px; font-size: .74rem; margin-right: 4px; }
+
+  .ext-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ext-chip { background: rgba(139,124,248,.15); border: 1px solid rgba(139,124,248,.3); border-radius: 999px; padding: 5px 12px; font-size: .8rem; }
+  .ext-chip b { color: var(--accent2); }
+
+  footer { text-align: center; color: var(--muted); font-size: .78rem; margin-top: 10px; line-height: 1.8; }
+  .empty { color: var(--muted); font-size: .9rem; }
+
+  @media (max-width: 640px) {
+    .bar-row { grid-template-columns: 20px 90px 1fr 54px; font-size: .8rem; }
+    .hours { gap: 2px; }
+    .hour-label { font-size: .5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>⚡ DSH Dev Wrapped</h1>
+    <div class="range"><b>${startDate}</b> → <b>${endDate}</b>（${fmt(report.timeRange.days)} 天）</div>
+  </header>
+
+  <div class="grid4">
+    <div class="stat"><div class="num">${fmt(overview.totalSessions)}</div><div class="label">会话总数</div></div>
+    <div class="stat"><div class="num">${fmt(overview.totalTurns)}</div><div class="label">对话轮数</div></div>
+    <div class="stat"><div class="num">${fmt(overview.totalToolCalls)}</div><div class="label">工具调用</div></div>
+    <div class="stat"><div class="num">${fmt(overview.activeDays)}</div><div class="label">活跃天数</div></div>
+  </div>
+
+  <section class="card">
+    <h2>🛠️ 工具排行<span class="sub">TOP8（含 ${fmt(overview.totalToolCalls)} 次调用）</span></h2>
+    ${renderToolBars(report)}
+  </section>
+
+  <section class="card">
+    ${renderHourly(report)}
+  </section>
+
+  <section class="card">
+    <h2>✨ 你的开发亮点</h2>
+    <div class="hl-grid">${renderHighlights(report)}</div>
+  </section>
+
+  <section class="card">
+    <h2>📊 更多数据</h2>
+    <div class="meta-grid">
+      <div class="meta-item"><span class="k">用户消息</span><span class="v">${fmt(overview.totalUserMessages)}</span></div>
+      <div class="meta-item"><span class="k">Token 用量</span><span class="v">${tokenText}</span></div>
+      <div class="meta-item"><span class="k">读取文件（去重）</span><span class="v">${fmt(fileOps.filesRead)}</span></div>
+      <div class="meta-item"><span class="k">写入文件（去重）</span><span class="v">${fmt(fileOps.filesWritten)}</span></div>
+      ${
+        timeline.peakDay
+          ? `<div class="meta-item"><span class="k">最活跃的一天</span><span class="v">${timeline.peakDay}</span></div>`
+          : ''
+      }
+      ${
+        fileOps.topFileExtensions.length > 0
+          ? `<div class="meta-item"><span class="k">常打交道扩展名</span><span class="v">${esc(fileOps.topFileExtensions.slice(0, 3).map((e) => '.' + e.ext).join(' / '))}</span></div>`
+          : ''
+      }
+    </div>
+  </section>
+
+  ${renderTopSessions(report)}
+
+  <footer>
+    由 dsh-dev-wrapped 生成 · 数据 100% 来自本地 DSH 会话记录<br>
+    ${fmtDateTime(report.generatedAt)}
+  </footer>
+</div>
+</body>
+</html>`
+}
+
+/** 写入 HTML 报告文件，返回文件绝对路径 */
+export async function writeHtmlReport(report: DevWrappedReport, outputDir: string): Promise<string> {
+  await fs.mkdir(outputDir, { recursive: true })
+  const filePath = path.join(outputDir, `${reportBaseName(report)}.html`)
+  await fs.writeFile(filePath, toHtmlReport(report), 'utf8')
+  return filePath
+}

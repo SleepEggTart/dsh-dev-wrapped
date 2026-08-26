@@ -1,0 +1,49 @@
+{
+  "name": "dsh-dev-wrapped",
+  "version": "0.1.0",
+  "description": "Developer Wrapped for DeepSeek Harness — your coding journey with AI, visualized.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "dsh-dev-wrapped": "./bin/dsh-dev-wrapped.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "dev": "tsc --watch"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek",
+    "deepseek-harness",
+    "wrapped",
+    "cli",
+    "statistics",
+    "report"
+  ],
+  "optionalDependencies": {
+    "fzstd": "^0.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  },
+  "license": "MIT"
+}
