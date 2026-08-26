@@ -45,5 +45,13 @@
     "typescript": "^5.6.0",
     "vitest": "^3.0.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SleepEggTart/dsh-dev-wrapped.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SleepEggTart/dsh-dev-wrapped/issues"
+  },
+  "homepage": "https://github.com/SleepEggTart/dsh-dev-wrapped#readme",
   "license": "MIT"
 }
