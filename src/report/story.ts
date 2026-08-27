@@ -129,7 +129,46 @@ export function toStoryReport(report: DevWrappedReport, lang: Lang = 'zh'): stri
     )
   }
 
-  // 8. Token / 成本估算（tokens 缺失则跳屏；估算开启时替换为成本）
+  // 8. 主力模型（阶段五：模型分布，缺失则跳屏）
+  if (report.models.length > 0) {
+    const top = report.models[0]
+    screens.push(
+      screen(`
+        <p class="lead">${t(lang, 'storyModelLead')}</p>
+        <div class="big tool">${esc(top.model)}</div>
+        <p class="tail">${t(lang, 'storyModelSub', { n: fmt(top.messages) })}</p>
+      `),
+    )
+  }
+
+  // 9. 深夜编码（阶段五：0-6 点占比，无调用或为零则跳屏）
+  if (report.timeline.lateNightRatio !== null && report.timeline.lateNightRatio > 0) {
+    screens.push(
+      screen(`
+        <p class="lead">${t(lang, 'storyLateNightLead')}</p>
+        <div class="big">${(report.timeline.lateNightRatio * 100).toFixed(1)}%</div>
+        <p class="tail">${t(lang, 'storyLateNightSub')}</p>
+      `),
+    )
+  }
+
+  // 10. 最不稳定工具（阶段五：错误率最高且调用数足够，缺失则跳屏）
+  const unstable = report.toolErrors.find((e) => e.calls >= 10)
+  if (unstable) {
+    screens.push(
+      screen(`
+        <p class="lead">${t(lang, 'storyUnstableToolLead')}</p>
+        <div class="big tool">${esc(unstable.name)}</div>
+        <p class="tail">${t(lang, 'storyUnstableToolSub', {
+          errors: fmt(unstable.errors),
+          calls: fmt(unstable.calls),
+          rate: (unstable.errorRate * 100).toFixed(1),
+        })}</p>
+      `),
+    )
+  }
+
+  // 11. Token / 成本估算（tokens 缺失则跳屏；估算开启时替换为成本）
   if (tokens) {
     if (report.costEstimate) {
       screens.push(

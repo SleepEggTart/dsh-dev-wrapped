@@ -52,10 +52,18 @@ export function aggregate(events: NormalizedEvent[], opts: StatsOptions = {}): D
   const includeSub = opts.includeSubagents ?? false
 
   // ---------- 第一遍：收集 session 头，做日期过滤 ----------
-  const sessionHeads = new Map<string, { createdAt: number; cwd: string; origin: 'main' | 'subagent' }>()
+  const sessionHeads = new Map<
+    string,
+    { createdAt: number; cwd: string; origin: 'main' | 'subagent'; agentPreset?: string }
+  >()
   for (const e of events) {
     if (e.kind === 'session-start') {
-      sessionHeads.set(e.sessionId, { createdAt: e.createdAt, cwd: e.cwd, origin: e.origin })
+      sessionHeads.set(e.sessionId, {
+        createdAt: e.createdAt,
+        cwd: e.cwd,
+        origin: e.origin,
+        ...(e.agentPreset ? { agentPreset: e.agentPreset } : {}),
+      })
     }
   }
 
@@ -71,19 +79,23 @@ export function aggregate(events: NormalizedEvent[], opts: StatsOptions = {}): D
   const sessions = new Map<string, SessionAgg>()
   const toolUsageAll = new Map<string, number>() // 工具总调用（主 + 可选子代理）
   const hourly = new Array<number>(24).fill(0)
+  const weekday = new Array<number>(7).fill(0) // 0=周一 … 6=周日（本地时区）
   const dailyToolCalls = new Map<string, number>() // 'YYYY-MM-DD' → toolCalls
   const dailySessions = new Map<string, Set<string>>() // 'YYYY-MM-DD' → 会话 id 集合
   const filesRead = new Set<string>()
   const filesWritten = new Set<string>()
   const extCounts = new Map<string, number>()
+  const modelCounts = new Map<string, number>() // 模型 → assistant 消息数
+  // 工具名 → isError 次数（阶段五：工具错误率）
+  const toolErrors = new Map<string, number>()
 
   let totalTurns = 0
   let totalUserMessages = 0
   let tokensInput = 0
   let tokensOutput = 0
   let tokensMissing = false
-  // callId → 所属会话（tool-result 归属用）
-  const callIdToSession = new Map<string, string>()
+  // callId → { 会话, 工具名 }（tool-result 归属与错误率关联回 tool-call）
+  const callIdToInfo = new Map<string, { sessionId: string; toolName: string }>()
 
   const getSession = (id: string, fallbackTime: number): SessionAgg | null => {
     // 日期过滤外的会话事件不统计
@@ -142,6 +154,7 @@ export function aggregate(events: NormalizedEvent[], opts: StatsOptions = {}): D
       case 'assistant-message': {
         const agg = getSession(e.sessionId, e.time)
         if (!agg) break
+        if (e.model) modelCounts.set(e.model, (modelCounts.get(e.model) ?? 0) + 1)
         if (e.usage) {
           tokensInput += e.usage.input
           tokensOutput += e.usage.output
@@ -157,8 +170,11 @@ export function aggregate(events: NormalizedEvent[], opts: StatsOptions = {}): D
         agg.toolCalls++
         agg.toolCounts.set(e.name, (agg.toolCounts.get(e.name) ?? 0) + 1)
         toolUsageAll.set(e.name, (toolUsageAll.get(e.name) ?? 0) + 1)
-        callIdToSession.set(e.callId, e.sessionId)
-        hourly[new Date(e.time).getHours()]++
+        callIdToInfo.set(e.callId, { sessionId: e.sessionId, toolName: e.name })
+        const localTime = new Date(e.time)
+        hourly[localTime.getHours()]++
+        // getDay(): 0=周日；换算为 0=周一 … 6=周日
+        weekday[(localTime.getDay() + 6) % 7]++
         dailyToolCalls.set(localDateKey(e.time), (dailyToolCalls.get(localDateKey(e.time)) ?? 0) + 1)
         if (e.step > agg.maxStep) agg.maxStep = e.step
         // 文件路径提取（read/write/edit 的 file_path 参数）；
@@ -186,8 +202,17 @@ export function aggregate(events: NormalizedEvent[], opts: StatsOptions = {}): D
       }
       case 'tool-result': {
         // tool-result 通过 callId 关联到 tool-call 所属会话（已含过滤逻辑）
-        const sid = callIdToSession.get(e.callId)
-        if (sid) getSession(sid, e.time)
+        const info = callIdToInfo.get(e.callId)
+        if (info) {
+          getSession(info.sessionId, e.time)
+          // 阶段五：isError 计入对应工具错误数（仅统计已归属会话的错误）
+          if (e.isError && keptSessionIds.has(info.sessionId)) {
+            const head = sessionHeads.get(info.sessionId)
+            if (head && (head.origin === 'main' || includeSub)) {
+              toolErrors.set(info.toolName, (toolErrors.get(info.toolName) ?? 0) + 1)
+            }
+          }
+        }
         break
       }
       case 'session-start':
@@ -303,6 +328,40 @@ export function aggregate(events: NormalizedEvent[], opts: StatsOptions = {}): D
     .map(([name, count]) => ({ name, count, category: toolCategory(name) }))
     .sort((a, b) => b.count - a.count)
 
+  // ---------- 阶段五：统计深化 ----------
+  // 工具错误率排行：仅含有错误记录的工具，按 errors 降序（错误率 = errors / 该工具总调用）
+  const toolErrorStats: Array<{ name: string; errors: number; calls: number; errorRate: number }> =
+    [...toolErrors.entries()]
+      .map(([name, errors]) => {
+        const calls = toolUsageAll.get(name) ?? errors
+        return { name, errors, calls, errorRate: Math.round((errors / calls) * 10_000) / 10_000 }
+      })
+      .sort((a, b) => b.errors - a.errors)
+
+  // 深夜占比：0-6 点（含）tool-call / 总调用；无调用时为 null
+  let toolCallTotal = 0
+  for (const c of hourly) toolCallTotal += c
+  let lateNightCalls = 0
+  for (let h = 0; h <= 6; h++) lateNightCalls += hourly[h]
+  const lateNightRatio =
+    toolCallTotal > 0 ? Math.round((lateNightCalls / toolCallTotal) * 10_000) / 10_000 : null
+
+  // 模型分布：按消息数降序
+  const models = [...modelCounts.entries()]
+    .map(([model, messages]) => ({ model, messages }))
+    .sort((a, b) => b.messages - a.messages)
+
+  // DSH agentPreset 分布：按主会话数降序（非 DSH 数据源无此字段，为空数组）
+  const presetCounts = new Map<string, number>()
+  for (const id of keptSessionIds) {
+    const head = sessionHeads.get(id)!
+    if (head.origin !== 'main' || !head.agentPreset) continue
+    presetCounts.set(head.agentPreset, (presetCounts.get(head.agentPreset) ?? 0) + 1)
+  }
+  const agentPresets = [...presetCounts.entries()]
+    .map(([preset, count]) => ({ preset, sessions: count }))
+    .sort((a, b) => b.sessions - a.sessions)
+
   // ---------- topSessions（主会话按 toolCalls 排序 TOP5） ----------
   const topSessions: TopSession[] = [...mainSessions]
     .sort((a, b) => b.toolCalls - a.toolCalls)
@@ -367,7 +426,17 @@ export function aggregate(events: NormalizedEvent[], opts: StatsOptions = {}): D
         .slice(0, 10),
     },
     toolUsage,
-    timeline: { hourlyActivity: hourly, dailyActivity, peakHour, peakDay },
+    toolErrors: toolErrorStats,
+    models,
+    agentPresets,
+    timeline: {
+      hourlyActivity: hourly,
+      dailyActivity,
+      peakHour,
+      peakDay,
+      weekdayActivity: weekday,
+      lateNightRatio,
+    },
     highlights,
     topSessions,
   }

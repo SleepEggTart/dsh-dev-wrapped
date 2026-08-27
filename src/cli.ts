@@ -311,8 +311,8 @@ export async function runCli(argv: string[]): Promise<number> {
       await adapter.parse(f, (e) => events.push(e))
     } catch (err) {
       if (err instanceof ZstdUnavailableError) {
-        // zstd 与 fzstd 均不可用：提示安装后以非 0 退出
-        console.error(`✖ ${err.message}`)
+        // zstd 与 fzstd 均不可用：输出平台感知的安装指引后退出
+        console.error(`✖ ${err.message}：\n${err.installHint()}`)
         return 1
       }
       // 单文件失败（zstd 损坏等）：警告并跳过，不中断全局

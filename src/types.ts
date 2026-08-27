@@ -130,6 +130,29 @@ export interface ToolUsageStat {
   category: string
 }
 
+/** 单个工具的错误统计（阶段五统计深化） */
+export interface ToolErrorStat {
+  name: string
+  /** isError=true 的 tool-result 次数（按 callId 关联回 tool-call） */
+  errors: number
+  /** 该工具总调用次数（分母含未返回结果的调用） */
+  calls: number
+  /** errors / calls，保留 4 位小数 */
+  errorRate: number
+}
+
+/** 模型分布（按去重后的 assistant-message 条数计） */
+export interface ModelUsageStat {
+  model: string
+  messages: number
+}
+
+/** DSH agentPreset 分布（按主会话数计；非 DSH 数据源为空数组） */
+export interface AgentPresetStat {
+  preset: string
+  sessions: number
+}
+
 /** 时间线统计 */
 export interface TimelineStats {
   /** 长度 24，tool/call 按小时分布 */
@@ -137,6 +160,10 @@ export interface TimelineStats {
   dailyActivity: Array<{ date: string; sessions: number; toolCalls: number }>
   peakHour: number | null
   peakDay: string | null
+  /** 长度 7，tool-call 按星期分布（0=周一 … 6=周日，本地时区） */
+  weekdayActivity: number[]
+  /** 0-6 点（含）tool-call 占比（0~1，保留 4 位小数）；无调用时为 null */
+  lateNightRatio: number | null
 }
 
 /** 亮点 */
@@ -181,6 +208,12 @@ export interface DevWrappedReport {
   overview: OverviewStats
   fileOps: FileOpsStats
   toolUsage: Array<ToolUsageStat>
+  /** 工具错误率排行（仅含有错误记录的工具，按 errors 降序） */
+  toolErrors: Array<ToolErrorStat>
+  /** 模型分布（assistant-message.model 聚合，按消息数降序） */
+  models: Array<ModelUsageStat>
+  /** DSH agentPreset 分布（按主会话数降序；非 DSH 数据源为空数组） */
+  agentPresets: Array<AgentPresetStat>
   timeline: TimelineStats
   highlights: Highlights
   topSessions: Array<TopSession>

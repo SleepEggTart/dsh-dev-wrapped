@@ -25,11 +25,16 @@ const baseReport: DevWrappedReport = {
   },
   fileOps: { filesRead: 112, filesWritten: 41, topFileExtensions: [{ ext: 'ts', count: 32 }] },
   toolUsage: [{ name: '<script>', count: 99, category: '📦 其他' }],
+  toolErrors: [],
+  models: [],
+  agentPresets: [],
   timeline: {
     hourlyActivity: new Array(24).fill(0),
     dailyActivity: [{ date: '2026-08-20', sessions: 1, toolCalls: 5 }],
     peakHour: 23,
     peakDay: '2026-08-20',
+    weekdayActivity: new Array(7).fill(0),
+    lateNightRatio: null,
   },
   highlights: {
     longestSession: null,

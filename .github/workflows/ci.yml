@@ -1,0 +1,45 @@
+# CI：构建 + 测试（Node 18/20/22 矩阵，pnpm）
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  build-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 zstd（Linux，DSH 会话解压测试依赖）
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zstd
+
+      - name: 安装 zstd（Windows，DSH 会话解压测试依赖）
+        if: runner.os == 'Windows'
+        run: choco install zstandard
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 构建（tsc 类型检查）
+        run: pnpm build
+
+      - name: 测试
+        run: pnpm test

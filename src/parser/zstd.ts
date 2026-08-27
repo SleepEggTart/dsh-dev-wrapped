@@ -12,8 +12,29 @@ import * as readline from 'node:readline'
 /** zstd CLI 与 fzstd 均不可用 */
 export class ZstdUnavailableError extends Error {
   constructor() {
-    super('未找到 zstd 命令行工具，且可选依赖 fzstd 未安装。请安装 zstd 或运行: npm i fzstd')
+    super('未找到 zstd 命令行工具，且可选依赖 fzstd 未安装')
     this.name = 'ZstdUnavailableError'
+  }
+
+  /** 根据当前平台生成对应的安装指引 */
+  installHint(): string {
+    const platform = process.platform
+    const lines: string[] = ['  任选其一即可：']
+    if (platform === 'win32') {
+      lines.push('    winget install facebook.zstd          # 推荐')
+      lines.push('    npm i -g fzstd                        # 或安装 Node.js 解压库')
+    } else if (platform === 'darwin') {
+      lines.push('    brew install zstd                     # 推荐')
+      lines.push('    npm i -g fzstd                        # 或安装 Node.js 解压库')
+    } else {
+      lines.push('    sudo apt install zstd                 # Debian/Ubuntu')
+      lines.push('    sudo yum install zstd                 # RHEL/CentOS')
+      lines.push('    brew install zstd                     # macOS (Homebrew)')
+      lines.push('    npm i -g fzstd                        # 或安装 Node.js 解压库')
+    }
+    lines.push('')
+    lines.push('  详情见 README: https://github.com/SleepEggTart/dsh-dev-wrapped#readme')
+    return lines.join('\n')
   }
 }
 

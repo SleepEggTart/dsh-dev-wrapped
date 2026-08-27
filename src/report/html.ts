@@ -101,6 +101,33 @@ function renderTopSessions(report: DevWrappedReport, lang: Lang): string {
     </section>`
 }
 
+/** 工具稳定性小节（阶段五：错误率排行，无错误数据时显示满分文案） */
+function renderToolStability(report: DevWrappedReport, lang: Lang): string {
+  const top = report.toolErrors.slice(0, 5)
+  const sub = t(lang, 'toolStabilitySub', { max: String(top.length || 5) })
+  if (top.length === 0) {
+    return `
+    <section class="card">
+      <h2>${t(lang, 'toolStabilityTitle')}<span class="sub">${sub}</span></h2>
+      <p class="empty">${t(lang, 'noErrorData')}</p>
+    </section>`
+  }
+  const rows = top
+    .map(
+      (tool) =>
+        `<tr><td class="ws" title="${esc(tool.name)}">${esc(tool.name)}</td><td class="num">${fmt(tool.errors)}</td><td class="num">${fmt(tool.calls)}</td><td class="num">${(tool.errorRate * 100).toFixed(1)}%</td></tr>`,
+    )
+    .join('')
+  return `
+    <section class="card">
+      <h2>${t(lang, 'toolStabilityTitle')}<span class="sub">${sub}</span></h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>${t(lang, 'thTool')}</th><th>${t(lang, 'thErrors')}</th><th>${t(lang, 'thToolCalls')}</th><th>${t(lang, 'thErrorRate')}</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    </section>`
+}
+
 /** 生成完整 HTML 报告（compact 紧凑单页模式） */
 export function toHtmlReport(report: DevWrappedReport, lang: Lang = 'zh'): string {
   const { overview, timeline, fileOps } = report
@@ -266,8 +293,33 @@ export function toHtmlReport(report: DevWrappedReport, lang: Lang = 'zh'): strin
           ? `<div class="meta-item"><span class="k">${t(lang, 'topExts')}</span><span class="v">${esc(fileOps.topFileExtensions.slice(0, 3).map((e) => '.' + e.ext).join(' / '))}</span></div>`
           : ''
       }
+      ${
+        timeline.lateNightRatio !== null
+          ? `<div class="meta-item"><span class="k">${t(lang, 'lateNightRatio')}</span><span class="v" title="${esc(t(lang, 'lateNightNote', { pct: `${Math.round(timeline.lateNightRatio * 100)}%` }))}">${Math.round(timeline.lateNightRatio * 100)}%</span></div>`
+          : ''
+      }
+      ${
+        timeline.weekdayActivity.length === 7 && overview.totalToolCalls > 0
+          ? `<div class="meta-item"><span class="k">${t(lang, 'weekdayVsWeekend')}</span><span class="v">${t(lang, 'weekdayVsWeekendNote', {
+              wd: fmt(timeline.weekdayActivity.slice(0, 5).reduce((a, b) => a + b, 0)),
+              we: fmt(timeline.weekdayActivity.slice(5).reduce((a, b) => a + b, 0)),
+            })}</span></div>`
+          : ''
+      }
+      ${
+        report.models.length > 0
+          ? `<div class="meta-item"><span class="k">${t(lang, 'modelDist')}</span><span class="v" title="${esc(report.models.map((m) => `${m.model}: ${fmt(m.messages)}`).join(' · '))}">${esc(report.models[0].model)}</span></div>`
+          : ''
+      }
+      ${
+        report.agentPresets.length > 0
+          ? `<div class="meta-item"><span class="k">${t(lang, 'agentPresetDist')}</span><span class="v" title="${esc(report.agentPresets.map((p) => `${p.preset}: ${fmt(p.sessions)}`).join(' · '))}">${esc(report.agentPresets[0].preset)}</span></div>`
+          : ''
+      }
     </div>
   </section>
+
+  ${renderToolStability(report, lang)}
 
   ${renderTopSessions(report, lang)}
 

@@ -28,11 +28,19 @@ const baseReport: DevWrappedReport = {
     { name: 'Read', count: 700, category: '📖 文件操作' },
     { name: '<script>', count: 99, category: '📦 其他' },
   ],
+  toolErrors: [
+    { name: 'Edit', errors: 12, calls: 80, errorRate: 0.15 },
+    { name: 'Bash', errors: 3, calls: 200, errorRate: 0.015 },
+  ],
+  models: [{ model: 'deepseek-v4-pro', messages: 236 }],
+  agentPresets: [{ preset: 'standard', sessions: 13 }],
   timeline: {
     hourlyActivity: new Array(24).fill(0),
     dailyActivity: [{ date: '2026-08-20', sessions: 1, toolCalls: 5 }],
     peakHour: 23,
     peakDay: '2026-08-20',
+    weekdayActivity: new Array(7).fill(0),
+    lateNightRatio: 0.05,
   },
   highlights: {
     longestSession: {
@@ -59,7 +67,7 @@ describe('toStoryReport 结构', () => {
     expect(html).toContain('IntersectionObserver')
   })
 
-  it('屏序列完整：封面 → 会话 → 工具调用 → 最爱工具 → 高峰 → 最长会话 → 项目 → token → 尾屏', () => {
+  it('屏序列完整：封面 → 会话 → 工具调用 → 最爱工具 → 高峰 → 最长会话 → 项目 → 模型/深夜/最不稳工具 → token → 尾屏', () => {
     // 关键大数字与引导语都在
     expect(html).toContain('>44<')
     expect(html).toContain('>2,009<')
@@ -69,6 +77,25 @@ describe('toStoryReport 结构', () => {
     expect(html).toContain('D:\\proj')
     expect(html).toContain('1.46 亿')
     expect(html).toContain('>100<')
+    // 阶段五新增屏
+    expect(html).toContain('陪你最多的是')
+    expect(html).toContain('deepseek-v4-pro')
+    expect(html).toContain('5.0%') // 深夜占比
+    expect(html).toContain('最让你抓狂的工具是')
+    expect(html).toContain('Edit') // errors 降序首位且 calls>=10
+  })
+
+  it('阶段五新屏数据缺失时跳屏', () => {
+    const report: DevWrappedReport = {
+      ...baseReport,
+      models: [],
+      toolErrors: [],
+      timeline: { ...baseReport.timeline, lateNightRatio: null },
+    }
+    const html = toStoryReport(report)
+    expect(html).not.toContain('陪你最多的是')
+    expect(html).not.toContain('深夜')
+    expect(html).not.toContain('最让你抓狂的工具是')
   })
 
   it('工具名 XSS 转义（<script> 出现在 toolUsage 中）', () => {
