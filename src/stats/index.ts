@@ -19,7 +19,7 @@ import type {
   ToolUsageStat,
   TopSession,
 } from '../types.js'
-import { toolCategory } from '../adapters/dsh.js'
+import { toolCategory } from '../tools.js'
 
 /** 统计选项 */
 export interface StatsOptions {
@@ -161,12 +161,20 @@ export function aggregate(events: NormalizedEvent[], opts: StatsOptions = {}): D
         hourly[new Date(e.time).getHours()]++
         dailyToolCalls.set(localDateKey(e.time), (dailyToolCalls.get(localDateKey(e.time)) ?? 0) + 1)
         if (e.step > agg.maxStep) agg.maxStep = e.step
-        // 文件路径提取（read/write/edit 的 file_path 参数）
+        // 文件路径提取（read/write/edit 的 file_path 参数）；
+        // 工具名比较统一小写：DSH 为 read/write，Claude Code 为 Read/Write/MultiEdit 等
         const fp = typeof e.args.file_path === 'string' ? e.args.file_path : undefined
         if (fp) {
-          if (e.name === 'read') {
+          const tool = e.name.toLowerCase()
+          if (tool === 'read') {
             filesRead.add(fp)
-          } else if (e.name === 'write' || e.name === 'edit' || e.name === 'str_replace_editor') {
+          } else if (
+            tool === 'write' ||
+            tool === 'edit' ||
+            tool === 'multiedit' ||
+            tool === 'notebookedit' ||
+            tool === 'str_replace_editor'
+          ) {
             filesWritten.add(fp)
           }
           const ext = extOf(fp)

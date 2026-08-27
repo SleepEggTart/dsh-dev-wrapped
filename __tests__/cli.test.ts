@@ -51,6 +51,16 @@ describe('parseArgs 带值选项', () => {
     expect(result.until).toBe('2026-12-31')
   })
 
+  it('--adapter 正确取后一个值', () => {
+    const result = parseArgs(['--adapter', 'claude-code'])
+    expect(result.adapter).toBe('claude-code')
+  })
+
+  it('--claude-home 正确取后一个值', () => {
+    const result = parseArgs(['--claude-home', '/custom/claude'])
+    expect(result.claudeHome).toBe('/custom/claude')
+  })
+
   it('带值选项与布尔选项混合', () => {
     const result = parseArgs(['--dsh-home', '/data', '--json', '--since', '2026-06-01'])
     expect(result).toEqual({ dshHome: '/data', json: true, since: '2026-06-01' })

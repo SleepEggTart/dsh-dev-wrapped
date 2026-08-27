@@ -58,14 +58,25 @@ export interface RawSessionFile {
   workspaceDir: string
 }
 
+/** 会话头窥探结果（CLI 全量解析前的概要统计用） */
+export interface SessionHeader {
+  id: string
+  createdAt: number
+  cwd: string
+  origin: SessionOrigin
+  agentPreset?: string
+}
+
 /** 会话数据适配器接口 */
 export interface SessionAdapter {
-  /** 适配器标识，如 'dsh' */
+  /** 适配器标识，如 'dsh'、'claude-code' */
   readonly id: string
   /** 扫描数据根目录，返回全部会话文件（主会话与子代理均包含） */
   scan(rootDir: string): Promise<RawSessionFile[]>
   /** 解析单个会话文件，映射后的事件通过 onEvent 逐个发出 */
   parse(file: RawSessionFile, onEvent: (e: NormalizedEvent) => void): Promise<void>
+  /** 可选：窥探会话头（只读首行/首几行），供 CLI 统计主/子代理数与工作目录数 */
+  peekSessionHeader?(file: RawSessionFile): Promise<SessionHeader | null>
 }
 
 /* ==================== 报告数据结构 ==================== */

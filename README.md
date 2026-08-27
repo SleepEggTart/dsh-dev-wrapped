@@ -17,7 +17,7 @@ JSON 数据 + 深色渐变 HTML 报告卡片
 - **100% 本地解析**：数据不出本机，不依赖任何云服务
 - **零运行时依赖**：优先调用系统 `zstd` CLI 流式解压；未安装时自动回退可选依赖 `fzstd`
 - **诚实统计**：token 只采用模型返回的真实 `usage`，缺失即报告 `null`，禁止估算
-- **适配器架构**：解析层与统计层通过 `NormalizedEvent` 解耦，为后续接入其他 CLI 数据源预留接口
+- **适配器架构**：解析层与统计层通过 `NormalizedEvent` 解耦，支持 DSH 和 Claude Code 等多种数据源
 - **单文件 HTML**：纯 CSS 图表（条形图 / 24h 柱状图），无外部资源，手机与桌面均美观
 
 ## 快速开始
@@ -53,7 +53,9 @@ npx dsh-dev-wrapped
 用法: dsh-dev-wrapped [选项]
 
 选项:
+  --adapter <id>           数据源适配器: dsh（默认）/ claude-code / auto（自动检测）
   --dsh-home <path>        DSH 数据目录（默认 ~/.dsh）
+  --claude-home <path>     Claude Code 数据目录（默认 ~/.claude）
   --output <dir>           输出目录（默认 ./reports）
   --json                   只输出 JSON，不生成 HTML
   --since <YYYY-MM-DD>     起始日期（含），按会话 createdAt 本地时区过滤
@@ -66,6 +68,18 @@ npx dsh-dev-wrapped
 
 ```bash
 npx dsh-dev-wrapped --since 2026-08-01 --until 2026-08-31 --include-subagents
+```
+
+示例：扫描 Claude Code 会话数据：
+
+```bash
+npx dsh-dev-wrapped --adapter claude-code
+```
+
+示例：自动检测数据源（优先 DSH）：
+
+```bash
+npx dsh-dev-wrapped --adapter auto
 ```
 
 ## 统计口径

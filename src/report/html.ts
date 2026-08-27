@@ -147,13 +147,17 @@ export function toHtmlReport(report: DevWrappedReport): string {
   const tokenText = tokens
     ? `${fmtTokens(tokens.input)} 输入 / ${fmtTokens(tokens.output)} 输出`
     : '部分会话缺少用量记录'
+  // 标题与数据来源按适配器切换（adapterId 由 CLI 层写入）
+  const isClaude = report.adapterId === 'claude-code'
+  const title = isClaude ? 'Claude Code Dev Wrapped' : 'DSH Dev Wrapped'
+  const dataSourceText = isClaude ? '本地 Claude Code 会话记录' : '本地 DSH 会话记录'
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DSH Dev Wrapped</title>
+<title>${title}</title>
 <style>
   :root {
     --bg1: #0f0c29; --bg2: #302b63; --bg3: #24243e;
@@ -245,7 +249,7 @@ export function toHtmlReport(report: DevWrappedReport): string {
 <body>
 <div class="wrap">
   <header>
-    <h1>⚡ DSH Dev Wrapped</h1>
+    <h1>⚡ ${title}</h1>
     <div class="range"><b>${startDate}</b> → <b>${endDate}</b>（${fmt(report.timeRange.days)} 天）</div>
   </header>
 
@@ -293,7 +297,7 @@ export function toHtmlReport(report: DevWrappedReport): string {
   ${renderTopSessions(report)}
 
   <footer>
-    由 dsh-dev-wrapped 生成 · 数据 100% 来自本地 DSH 会话记录<br>
+    由 dsh-dev-wrapped 生成 · 数据 100% 来自${dataSourceText}<br>
     ${fmtDateTime(report.generatedAt)}
   </footer>
 </div>

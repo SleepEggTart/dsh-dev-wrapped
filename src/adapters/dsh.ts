@@ -47,41 +47,9 @@ const IGNORED_TYPES = new Set<string>([
   'step/end',
 ])
 
-/** 工具分类映射（v2 提示词 3.5 节 + 实测补充；bash 未实测但保留映射） */
-export const TOOL_CATEGORIES: Record<string, string> = {
-  read: '📖 文件操作',
-  write: '✏️ 代码产出',
-  edit: '✏️ 代码产出',
-  str_replace_editor: '✏️ 代码产出',
-  glob: '🔍 文件搜索',
-  grep: '🔍 内容搜索',
-  bash: '🖥️ 命令执行',
-  pwsh: '🖥️ 命令执行',
-  pwd: '🖥️ 命令执行',
-  job_list: '🖥️ 命令执行',
-  job_output: '🖥️ 命令执行',
-  job_kill: '🖥️ 命令执行',
-  subagent: '🤖 代理委派',
-  web_search: '🌐 信息检索',
-  web_fetch: '🌐 信息检索',
-  read_page: '🌐 信息检索',
-  ask_user_question: '💬 人机交互',
-  todo_write: '📋 任务管理',
-  skill: '🧠 技能加载',
-  read_image: '🖼️ 多媒体',
-  describe_image: '🖼️ 多媒体',
-  browser_navigate: '🌐 浏览器',
-  browser_click: '🌐 浏览器',
-  browser_snapshot: '🌐 浏览器',
-}
-
-/** 未知工具的归类 */
-export const OTHER_CATEGORY = '📦 其他'
-
-/** 获取工具分类 */
-export function toolCategory(name: string): string {
-  return TOOL_CATEGORIES[name] ?? OTHER_CATEGORY
-}
+// 工具分类映射已抽取到共享模块 src/tools.ts（大小写不敏感，供多适配器复用）；
+// 此处重导出以保持既有导入路径（stats 层 / 测试）兼容
+export { TOOL_CATEGORIES, OTHER_CATEGORY, toolCategory } from '../tools.js'
 
 /** 安全取有限数值，非数值返回 0 */
 function num(v: unknown): number {

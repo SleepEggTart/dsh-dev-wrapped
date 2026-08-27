@@ -3,19 +3,23 @@
  */
 import * as os from 'node:os'
 import * as path from 'node:path'
+import * as fs from 'node:fs/promises'
 import { exec } from 'node:child_process'
 import { DshAdapter } from './adapters/dsh.js'
+import { ClaudeCodeAdapter } from './adapters/claude-code.js'
 import { aggregate } from './stats/index.js'
 import { writeJsonReport, localDateKey } from './report/json.js'
 import { writeHtmlReport } from './report/html.js'
 import { ZstdUnavailableError } from './parser/zstd.js'
-import type { NormalizedEvent } from './types.js'
+import type { NormalizedEvent, SessionAdapter } from './types.js'
 
 /** 用法说明 */
 const USAGE = `用法: dsh-dev-wrapped [选项]
 
 选项:
+  --adapter <id>           数据源适配器: dsh（默认）/ claude-code / auto（自动检测）
   --dsh-home <path>        DSH 数据目录（默认 ~/.dsh）
+  --claude-home <path>     Claude Code 数据目录（默认 ~/.claude）
   --output <dir>           输出目录（默认 ./reports）
   --json                   只输出 JSON，不生成 HTML
   --since <YYYY-MM-DD>     起始日期（含），按会话 createdAt 本地时区过滤
@@ -26,7 +30,9 @@ const USAGE = `用法: dsh-dev-wrapped [选项]
 
 /** CLI 选项 */
 export interface CliOptions {
+  adapter?: string
   dshHome?: string
+  claudeHome?: string
   output?: string
   json?: boolean
   since?: string
@@ -54,6 +60,18 @@ export function parseArgs(argv: string[]): CliOptions {
       case '--dsh-home': {
         const v = takeValue(argv, i, a)
         opts.dshHome = v.value
+        i = v.next
+        break
+      }
+      case '--claude-home': {
+        const v = takeValue(argv, i, a)
+        opts.claudeHome = v.value
+        i = v.next
+        break
+      }
+      case '--adapter': {
+        const v = takeValue(argv, i, a)
+        opts.adapter = v.value
         i = v.next
         break
       }
@@ -127,6 +145,15 @@ function padEnd(s: string, width: number): string {
   return pad > 0 ? s + ' '.repeat(pad) : s
 }
 
+/** 判断目录是否存在（auto 适配器检测数据目录用） */
+async function dirExists(dir: string): Promise<boolean> {
+  try {
+    return (await fs.stat(dir)).isDirectory()
+  } catch {
+    return false
+  }
+}
+
 /** CLI 主入口；返回进程退出码 */
 export async function runCli(argv: string[]): Promise<number> {
   let opts: CliOptions
@@ -158,19 +185,63 @@ export async function runCli(argv: string[]): Promise<number> {
   }
 
   const dshHome = opts.dshHome ?? path.join(os.homedir(), '.dsh')
+  const claudeHome = opts.claudeHome ?? path.join(os.homedir(), '.claude')
   const outputDir = opts.output ?? './reports'
 
-  console.log('🔍 扫描 DSH 会话数据...')
-  const adapter = new DshAdapter()
-  const files = await adapter.scan(dshHome)
+  // ---------- 适配器选择 ----------
+  let adapter: SessionAdapter
+  let dataRoot: string
+  const adapterArg = opts.adapter ?? 'dsh'
+  if (adapterArg === 'dsh') {
+    adapter = new DshAdapter()
+    dataRoot = dshHome
+  } else if (adapterArg === 'claude-code') {
+    adapter = new ClaudeCodeAdapter()
+    dataRoot = claudeHome
+  } else if (adapterArg === 'auto') {
+    // 自动检测：两个数据目录都存在时默认 DSH 并提示显式指定
+    const hasDsh = await dirExists(path.join(dshHome, 'sessions'))
+    const hasClaude = await dirExists(path.join(claudeHome, 'projects'))
+    if (hasDsh && hasClaude) {
+      console.log('ℹ️ 同时检测到 DSH 与 Claude Code 数据目录，默认使用 DSH；如需扫描 Claude Code 请显式指定 --adapter claude-code')
+      adapter = new DshAdapter()
+      dataRoot = dshHome
+    } else if (hasClaude) {
+      adapter = new ClaudeCodeAdapter()
+      dataRoot = claudeHome
+    } else if (hasDsh) {
+      adapter = new DshAdapter()
+      dataRoot = dshHome
+    } else {
+      console.log(`📂 未找到任何会话数据（${dshHome}/sessions 与 ${claudeHome}/projects 均不存在）`)
+      return 0
+    }
+  } else {
+    console.error(`✖ 无效的 --adapter 值: ${adapterArg}（可选 dsh / claude-code / auto）\n`)
+    console.error(USAGE)
+    return 1
+  }
+
+  // 适配器展示名（扫描提示与报告标题用）
+  const adapterLabel = adapter.id === 'claude-code' ? 'Claude Code' : 'DSH'
+  const title = `${adapterLabel} Dev Wrapped`
+
+  console.log(`🔍 扫描 ${adapterLabel} 会话数据...`)
+  const files = await adapter.scan(dataRoot)
   if (files.length === 0) {
-    console.log(`📂 未在 ${dshHome} 找到 DSH 会话数据`)
-    console.log('   请确认目录正确；会话通常存储在 ~/.dsh/sessions')
+    console.log(`📂 未在 ${dataRoot} 找到 ${adapterLabel} 会话数据`)
+    console.log(
+      adapter.id === 'claude-code'
+        ? '   请确认目录正确；会话通常存储在 ~/.claude/projects'
+        : '   请确认目录正确；会话通常存储在 ~/.dsh/sessions',
+    )
     return 0
   }
 
-  // 窥探会话头：统计主/子代理数与工作目录数
-  const headers = await Promise.all(files.map((f) => adapter.peekSessionHeader(f)))
+  // 窥探会话头：统计主/子代理数与工作目录数（适配器未实现时跳过）
+  const headers = adapter.peekSessionHeader
+    ? await Promise.all(files.map((f) => adapter.peekSessionHeader!(f)))
+    : []
   const valid = headers.filter((h): h is NonNullable<typeof h> => h !== null)
   if (valid.length > 0) {
     const mainCount = valid.filter((h) => h.origin === 'main').length
@@ -201,7 +272,9 @@ export async function runCli(argv: string[]): Promise<number> {
 
   console.log('📊 生成报告...')
   const report = aggregate(events, { includeSubagents: opts.includeSubagents, since, until })
-  report.dshHome = dshHome
+  // 数据根目录与适配器标识由 CLI 层覆盖（aggregate 默认按 DSH 填充）
+  report.dshHome = dataRoot
+  report.adapterId = adapter.id
 
   if (report.overview.totalSessions === 0) {
     console.log('📂 指定范围内没有会话数据')
@@ -217,7 +290,7 @@ export async function runCli(argv: string[]): Promise<number> {
     .join(' · ')
   const sep = '═'.repeat(39)
   console.log(sep)
-  console.log('  DSH Dev Wrapped')
+  console.log(`  ${title}`)
   console.log(`  ${startDate} → ${endDate}（${report.timeRange.days} 天）`)
   console.log(sep)
   console.log(`  ${padEnd('会话总数', 12)}${report.overview.totalSessions.toLocaleString('zh-CN')}`)
