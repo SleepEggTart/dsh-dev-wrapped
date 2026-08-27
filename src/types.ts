@@ -81,6 +81,18 @@ export interface SessionAdapter {
 
 /* ==================== 报告数据结构 ==================== */
 
+/** 成本估算结果（--estimate-cost 显式开启时才有值；卡片上必须标注"估算"） */
+export interface CostEstimate {
+  /** 计价模型（公开单价来源） */
+  model: string
+  currency: 'CNY'
+  inputTokens: number
+  outputTokens: number
+  inputCost: number
+  outputCost: number
+  total: number
+}
+
 /** 时间范围 */
 export interface TimeRange {
   start: number
@@ -161,6 +173,10 @@ export interface DevWrappedReport {
   generatedAt: number
   dshHome: string
   adapterId: string
+  /** --year 年度模式：年份（如 2026），影响报告标题 */
+  yearMode?: number
+  /** 成本估算（--estimate-cost 开启且 tokens 完整时有值） */
+  costEstimate?: CostEstimate | null
   timeRange: TimeRange
   overview: OverviewStats
   fileOps: FileOpsStats

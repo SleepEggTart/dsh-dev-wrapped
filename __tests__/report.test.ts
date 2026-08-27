@@ -159,3 +159,39 @@ describe('toHtmlReport 工具排行', () => {
     expect(html).toContain('暂无工具调用数据')
   })
 })
+
+describe('toHtmlReport 英文模式与年度标题', () => {
+  it('--lang en 输出英文标签', () => {
+    const html = toHtmlReport(baseReport, 'en')
+    expect(html).toContain('Sessions')
+    expect(html).toContain('Tool Calls')
+    expect(html).toContain('Some sessions lack usage data')
+    expect(html).not.toContain('会话总数')
+  })
+
+  it('yearMode 优先于品牌名标题', () => {
+    const report: DevWrappedReport = { ...baseReport, yearMode: 2026 }
+    expect(toHtmlReport(report)).toContain('2026 年度回顾')
+    expect(toHtmlReport(report, 'en')).toContain('2026 Year in Review')
+  })
+
+  it('成本估算展示并带估算标注', () => {
+    const report: DevWrappedReport = {
+      ...baseReport,
+      overview: { ...baseReport.overview, tokens: { input: 1_000_000, output: 1_000_000 } },
+      costEstimate: {
+        model: 'deepseek-chat',
+        currency: 'CNY',
+        inputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+        inputCost: 2,
+        outputCost: 8,
+        total: 10,
+      },
+    }
+    const html = toHtmlReport(report)
+    expect(html).toContain('成本估算')
+    expect(html).toContain('¥10.00')
+    expect(html).toContain('deepseek-chat')
+  })
+})

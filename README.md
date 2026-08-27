@@ -18,6 +18,8 @@ JSON 数据 + 深色渐变 HTML 报告卡片
 - **零运行时依赖**：优先调用系统 `zstd` CLI 流式解压；未安装时自动回退可选依赖 `fzstd`
 - **诚实统计**：token 只采用模型返回的真实 `usage`，缺失即报告 `null`，禁止估算
 - **适配器架构**：解析层与统计层通过 `NormalizedEvent` 解耦，支持 DSH 和 Claude Code 等多种数据源
+- **逐屏叙事报告**：Spotify Wrapped 风格 scroll-snap 逐屏回顾（默认），`--compact` 切换紧凑单页
+- **多语言**：`--lang en` 输出英文报告卡片，方便海外分享
 - **单文件 HTML**：纯 CSS 图表（条形图 / 24h 柱状图），无外部资源，手机与桌面均美观
 
 ## 快速开始
@@ -58,8 +60,12 @@ npx dsh-dev-wrapped
   --claude-home <path>     Claude Code 数据目录（默认 ~/.claude）
   --output <dir>           输出目录（默认 ./reports）
   --json                   只输出 JSON，不生成 HTML
-  --since <YYYY-MM-DD>     起始日期（含），按会话 createdAt 本地时区过滤
-  --until <YYYY-MM-DD>     结束日期（含）
+  --compact                紧凑单页报告（默认为逐屏滚动叙事模式）
+  --year <YYYY>            年度回顾：等价于该年 1-1 ~ 12-31 的日期过滤
+  --lang <zh|en>           报告语言（默认 zh）
+  --estimate-cost          按 DeepSeek 单价估算成本（基于真实 token，标注"估算"）
+  --since <YYYY-MM-DD>     起始日期（含），按会话 createdAt 本地时区过滤；与 --year 互斥
+  --until <YYYY-MM-DD>     结束日期（含）；与 --year 互斥
   --include-subagents      并入子代理会话的工具调用统计
   --help, -h               显示帮助
 ```
@@ -82,6 +88,12 @@ npx dsh-dev-wrapped --adapter claude-code
 npx dsh-dev-wrapped --adapter auto
 ```
 
+示例：2026 年度回顾 + 成本估算 + 英文卡片：
+
+```bash
+npx dsh-dev-wrapped --year 2026 --estimate-cost --lang en
+```
+
 ## 统计口径
 
 | 口径 | 说明 |
@@ -93,6 +105,7 @@ npx dsh-dev-wrapped --adapter auto
 | 主/子代理 | 以 session 头 `origin` 字段为准，`delegationDepth >= 1` 兜底 |
 | 日期过滤 | 以会话 `createdAt` 为基准，本地时区，含边界当日 |
 | 活跃天数 | 会话创建日 ∪ 工具调用日（跨天 resume 的活动日也计入） |
+| 成本估算 | `--estimate-cost` 显式开启时，按 DeepSeek deepseek-chat 公开单价（输入 ¥2/M、输出 ¥8/M）乘以**真实** token 计算；卡片上标注"估算"；token 缺失时跳过 |
 
 ## 开发
 

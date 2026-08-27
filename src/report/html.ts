@@ -1,83 +1,44 @@
 /**
- * HTML 报告卡片生成
+ * HTML 报告卡片生成（阶段四起为 --compact 紧凑单页模式）
  *
  * 单 HTML 文件、零外部依赖、深色蓝紫渐变背景、系统中文字体栈。
  * 布局：标题 + 时间范围 → 4 个核心大数字 → 工具排行（纯 CSS 横向条形图 TOP8）
  *       → 24h 活跃分布（纯 CSS 柱状）→ 亮点卡片 → topSessions → 底部署名。
- * 响应式（手机/桌面均美观）；数字用 toLocaleString()。
+ * 响应式（手机/桌面均美观）；文案按 lang 输出（默认中文）。
  */
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import type { DevWrappedReport } from '../types.js'
+import type { Lang } from '../i18n.js'
+import { t } from '../i18n.js'
+import { DEEPSEEK_PRICING, fmtCost } from '../cost.js'
+import { esc, fmt, fmtDuration, fmtTokens, fmtDateTime } from './format.js'
 import { localDateKey, reportBaseName } from './json.js'
-
-/** HTML 转义（数据中的工具名、路径等不可信文本） */
-function esc(s: string): string {
-  return s
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-}
-
-/** 数字本地化格式 */
-function fmt(n: number): string {
-  return n.toLocaleString('zh-CN')
-}
-
-/** 时长人性化：天/时/分 */
-function fmtDuration(ms: number): string {
-  if (ms <= 0) return '—'
-  const minutes = Math.floor(ms / 60_000)
-  if (minutes < 1) return '< 1 分钟'
-  const days = Math.floor(minutes / 1440)
-  const hours = Math.floor((minutes % 1440) / 60)
-  const mins = minutes % 60
-  const parts: string[] = []
-  if (days > 0) parts.push(`${days} 天`)
-  if (hours > 0) parts.push(`${hours} 小时`)
-  if (mins > 0 && days === 0) parts.push(`${mins} 分钟`)
-  return parts.slice(0, 2).join(' ') || `${mins} 分钟`
-}
-
-/** token 数值友好化（万级缩写） */
-function fmtTokens(n: number): string {
-  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(2)} 亿`
-  if (n >= 10_000) return `${(n / 10_000).toFixed(1)} 万`
-  return fmt(n)
-}
-
-/** 时间戳 → 'YYYY-MM-DD HH:mm' */
-function fmtDateTime(time: number): string {
-  const d = new Date(time)
-  const p = (v: number) => String(v).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
-}
+import { reportTitle } from './story.js'
 
 /** 工具排行 TOP8 横向条形图 */
-function renderToolBars(report: DevWrappedReport): string {
+function renderToolBars(report: DevWrappedReport, lang: Lang): string {
   const top = report.toolUsage.slice(0, 8)
-  if (top.length === 0) return '<p class="empty">暂无工具调用数据</p>'
+  if (top.length === 0) return `<p class="empty">${t(lang, 'noToolData')}</p>`
   const max = top[0].count
   return top
     .map(
-      (t, i) => `
+      (tool, i) => `
         <div class="bar-row">
           <span class="bar-rank">${i + 1}</span>
-          <span class="bar-name" title="${esc(t.name)}">${esc(t.name)}</span>
+          <span class="bar-name" title="${esc(tool.name)}">${esc(tool.name)}</span>
           <div class="bar-track">
-            <div class="bar-fill" style="width:${Math.max(4, Math.round((t.count / max) * 100))}%"></div>
+            <div class="bar-fill" style="width:${Math.max(4, Math.round((tool.count / max) * 100))}%"></div>
           </div>
-          <span class="bar-count">${fmt(t.count)}</span>
-          <span class="bar-cat">${esc(t.category)}</span>
+          <span class="bar-count">${fmt(tool.count)}</span>
+          <span class="bar-cat">${esc(tool.category)}</span>
         </div>`,
     )
     .join('')
 }
 
 /** 24 小时活跃分布柱状图 */
-function renderHourly(report: DevWrappedReport): string {
+function renderHourly(report: DevWrappedReport, lang: Lang): string {
   const max = Math.max(...report.timeline.hourlyActivity, 1)
   const peak = report.timeline.peakHour
   const bars = report.timeline.hourlyActivity
@@ -87,73 +48,82 @@ function renderHourly(report: DevWrappedReport): string {
       return `<div class="hour-cell"><div class="${cls}" style="height:${Math.max(height, 3)}%"></div><span class="hour-label">${h}</span></div>`
     })
     .join('')
-  const peakText = peak !== null ? `高峰时段 ${String(peak).padStart(2, '0')}:00` : '无数据'
-  return `<div class="hours-head"><span>24 小时活跃分布</span><span class="hours-peak">${peakText}</span></div><div class="hours">${bars}</div>`
+  const peakText =
+    peak !== null ? t(lang, 'peakLabel', { hh: String(peak).padStart(2, '0') }) : t(lang, 'noData')
+  return `<div class="hours-head"><span>${t(lang, 'hourlyTitle')}</span><span class="hours-peak">${peakText}</span></div><div class="hours">${bars}</div>`
 }
 
 /** 亮点卡片 */
-function renderHighlights(report: DevWrappedReport): string {
+function renderHighlights(report: DevWrappedReport, lang: Lang): string {
   const { highlights } = report
   const cards: string[] = []
+  const dash = t(lang, 'empty')
 
   // 最爱工具
   cards.push(
-    `<div class="hl-card"><div class="hl-icon">🛠️</div><div class="hl-label">最爱工具</div><div class="hl-value">${highlights.favoriteTool ? esc(highlights.favoriteTool) : '—'}</div></div>`,
+    `<div class="hl-card"><div class="hl-icon">🛠️</div><div class="hl-label">${t(lang, 'favoriteTool')}</div><div class="hl-value">${highlights.favoriteTool ? esc(highlights.favoriteTool) : dash}</div></div>`,
   )
   // 最爱项目
   const ws = highlights.favoriteWorkspace
   cards.push(
-    `<div class="hl-card"><div class="hl-icon">📁</div><div class="hl-label">最爱项目</div><div class="hl-value small" title="${ws ? esc(ws) : ''}">${ws ? esc(ws) : '—'}</div></div>`,
+    `<div class="hl-card"><div class="hl-icon">📁</div><div class="hl-label">${t(lang, 'favoriteWorkspace')}</div><div class="hl-value small" title="${ws ? esc(ws) : ''}">${ws ? esc(ws) : dash}</div></div>`,
   )
   // 最长会话
   const ls = highlights.longestSession
   cards.push(
-    `<div class="hl-card"><div class="hl-icon">⏱️</div><div class="hl-label">最长会话</div><div class="hl-value">${ls ? fmtDuration(ls.durationMs) : '—'}</div><div class="hl-sub">${ls ? `${fmt(ls.toolCalls)} 次工具调用 · ${ls.turns} 轮` : ''}</div></div>`,
+    `<div class="hl-card"><div class="hl-icon">⏱️</div><div class="hl-label">${t(lang, 'longestSession')}</div><div class="hl-value">${ls ? fmtDuration(ls.durationMs, lang) : dash}</div><div class="hl-sub">${ls ? `${fmt(ls.toolCalls)} ${t(lang, 'unitToolCalls')} · ${ls.turns} ${t(lang, 'unitTurns')}` : ''}</div></div>`,
   )
   // 最复杂任务
   const mc = highlights.mostComplexTask
   cards.push(
-    `<div class="hl-card"><div class="hl-icon">🧩</div><div class="hl-label">最复杂任务</div><div class="hl-value">${mc ? `${fmt(mc.totalSteps)} 步` : '—'}</div><div class="hl-sub">${mc ? `${mc.uniqueTools.length} 种工具` : ''}</div></div>`,
+    `<div class="hl-card"><div class="hl-icon">🧩</div><div class="hl-label">${t(lang, 'mostComplexTask')}</div><div class="hl-value">${mc ? `${fmt(mc.totalSteps)} ${t(lang, 'unitSteps')}` : dash}</div><div class="hl-sub">${mc ? `${mc.uniqueTools.length} ${t(lang, 'unitToolsKinds')}` : ''}</div></div>`,
   )
   return cards.join('')
 }
 
 /** 热门会话列表 */
-function renderTopSessions(report: DevWrappedReport): string {
+function renderTopSessions(report: DevWrappedReport, lang: Lang): string {
   if (report.topSessions.length === 0) return ''
   const rows = report.topSessions
     .map((s, i) => {
       const ws = esc(s.workspace)
-      const tools = s.topTools.map((t) => `<code>${esc(t)}</code>`).join(' ')
+      const tools = s.topTools.map((tool) => `<code>${esc(tool)}</code>`).join(' ')
       return `<tr><td class="rank">${i + 1}</td><td class="ws" title="${ws}">${ws}</td><td>${fmtDateTime(s.createdAt)}</td><td class="num">${fmt(s.turns)}</td><td class="num">${fmt(s.toolCalls)}</td><td class="tools">${tools}</td></tr>`
     })
     .join('')
   return `
     <section class="card">
-      <h2>🏆 热门会话 TOP5</h2>
+      <h2>${t(lang, 'topSessionsTitle')}</h2>
       <div class="table-wrap"><table>
-        <thead><tr><th>#</th><th>项目</th><th>开始时间</th><th>轮次</th><th>工具调用</th><th>常用工具</th></tr></thead>
+        <thead><tr><th>#</th><th>${t(lang, 'thProject')}</th><th>${t(lang, 'thStart')}</th><th>${t(lang, 'thTurns')}</th><th>${t(lang, 'thToolCalls')}</th><th>${t(lang, 'thTopTools')}</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     </section>`
 }
 
-/** 生成完整 HTML 报告 */
-export function toHtmlReport(report: DevWrappedReport): string {
+/** 生成完整 HTML 报告（compact 紧凑单页模式） */
+export function toHtmlReport(report: DevWrappedReport, lang: Lang = 'zh'): string {
   const { overview, timeline, fileOps } = report
   const startDate = localDateKey(report.timeRange.start)
   const endDate = localDateKey(report.timeRange.end)
   const tokens = overview.tokens
   const tokenText = tokens
-    ? `${fmtTokens(tokens.input)} 输入 / ${fmtTokens(tokens.output)} 输出`
-    : '部分会话缺少用量记录'
-  // 标题与数据来源按适配器切换（adapterId 由 CLI 层写入）
-  const isClaude = report.adapterId === 'claude-code'
-  const title = isClaude ? 'Claude Code Dev Wrapped' : 'DSH Dev Wrapped'
-  const dataSourceText = isClaude ? '本地 Claude Code 会话记录' : '本地 DSH 会话记录'
+    ? `${fmtTokens(tokens.input, lang)} ${t(lang, 'tokensIn')} / ${fmtTokens(tokens.output, lang)} ${t(lang, 'tokensOut')}`
+    : t(lang, 'tokensMissing')
+  // 标题按年度模式优先，其次按适配器切换（adapterId 由 CLI 层写入）
+  const title = reportTitle(report, lang)
+  const dataSourceText = t(
+    lang,
+    'footerDataFrom',
+    {
+      source: t(lang, report.adapterId === 'claude-code' ? 'dataSourceClaude' : 'dataSourceDsh'),
+    },
+  )
+  // 成本估算（显式开启且 tokens 完整时有值；必须带"估算"标注）
+  const cost = report.costEstimate
 
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="${lang === 'zh' ? 'zh-CN' : 'en'}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -250,54 +220,59 @@ export function toHtmlReport(report: DevWrappedReport): string {
 <div class="wrap">
   <header>
     <h1>⚡ ${title}</h1>
-    <div class="range"><b>${startDate}</b> → <b>${endDate}</b>（${fmt(report.timeRange.days)} 天）</div>
+    <div class="range"><b>${startDate}</b> → <b>${endDate}</b>（${t(lang, 'rangeDays', { n: fmt(report.timeRange.days) })}）</div>
   </header>
 
   <div class="grid4">
-    <div class="stat"><div class="num">${fmt(overview.totalSessions)}</div><div class="label">会话总数</div></div>
-    <div class="stat"><div class="num">${fmt(overview.totalTurns)}</div><div class="label">对话轮数</div></div>
-    <div class="stat"><div class="num">${fmt(overview.totalToolCalls)}</div><div class="label">工具调用</div></div>
-    <div class="stat"><div class="num">${fmt(overview.activeDays)}</div><div class="label">活跃天数</div></div>
+    <div class="stat"><div class="num">${fmt(overview.totalSessions)}</div><div class="label">${t(lang, 'statSessions')}</div></div>
+    <div class="stat"><div class="num">${fmt(overview.totalTurns)}</div><div class="label">${t(lang, 'statTurns')}</div></div>
+    <div class="stat"><div class="num">${fmt(overview.totalToolCalls)}</div><div class="label">${t(lang, 'statToolCalls')}</div></div>
+    <div class="stat"><div class="num">${fmt(overview.activeDays)}</div><div class="label">${t(lang, 'statActiveDays')}</div></div>
   </div>
 
   <section class="card">
-    <h2>🛠️ 工具排行<span class="sub">TOP8（含 ${fmt(overview.totalToolCalls)} 次调用）</span></h2>
-    ${renderToolBars(report)}
+    <h2>${t(lang, 'toolRankTitle')}<span class="sub">${t(lang, 'toolRankSub', { n: fmt(overview.totalToolCalls) })}</span></h2>
+    ${renderToolBars(report, lang)}
   </section>
 
   <section class="card">
-    ${renderHourly(report)}
+    ${renderHourly(report, lang)}
   </section>
 
   <section class="card">
-    <h2>✨ 你的开发亮点</h2>
-    <div class="hl-grid">${renderHighlights(report)}</div>
+    <h2>${t(lang, 'highlightsTitle')}</h2>
+    <div class="hl-grid">${renderHighlights(report, lang)}</div>
   </section>
 
   <section class="card">
-    <h2>📊 更多数据</h2>
+    <h2>${t(lang, 'moreDataTitle')}</h2>
     <div class="meta-grid">
-      <div class="meta-item"><span class="k">用户消息</span><span class="v">${fmt(overview.totalUserMessages)}</span></div>
-      <div class="meta-item"><span class="k">Token 用量</span><span class="v">${tokenText}</span></div>
-      <div class="meta-item"><span class="k">读取文件（去重）</span><span class="v">${fmt(fileOps.filesRead)}</span></div>
-      <div class="meta-item"><span class="k">写入文件（去重）</span><span class="v">${fmt(fileOps.filesWritten)}</span></div>
+      <div class="meta-item"><span class="k">${t(lang, 'userMessages')}</span><span class="v">${fmt(overview.totalUserMessages)}</span></div>
+      <div class="meta-item"><span class="k">${t(lang, 'tokenUsage')}</span><span class="v">${tokenText}</span></div>
+      ${
+        cost
+          ? `<div class="meta-item"><span class="k">${t(lang, 'costEstimate')}</span><span class="v" title="${esc(t(lang, 'costEstimateNote', { model: cost.model, in: DEEPSEEK_PRICING.input, out: DEEPSEEK_PRICING.output }))}">${fmtCost(cost.total)}</span></div>`
+          : ''
+      }
+      <div class="meta-item"><span class="k">${t(lang, 'filesRead')}</span><span class="v">${fmt(fileOps.filesRead)}</span></div>
+      <div class="meta-item"><span class="k">${t(lang, 'filesWritten')}</span><span class="v">${fmt(fileOps.filesWritten)}</span></div>
       ${
         timeline.peakDay
-          ? `<div class="meta-item"><span class="k">最活跃的一天</span><span class="v">${timeline.peakDay}</span></div>`
+          ? `<div class="meta-item"><span class="k">${t(lang, 'peakDay')}</span><span class="v">${timeline.peakDay}</span></div>`
           : ''
       }
       ${
         fileOps.topFileExtensions.length > 0
-          ? `<div class="meta-item"><span class="k">常打交道扩展名</span><span class="v">${esc(fileOps.topFileExtensions.slice(0, 3).map((e) => '.' + e.ext).join(' / '))}</span></div>`
+          ? `<div class="meta-item"><span class="k">${t(lang, 'topExts')}</span><span class="v">${esc(fileOps.topFileExtensions.slice(0, 3).map((e) => '.' + e.ext).join(' / '))}</span></div>`
           : ''
       }
     </div>
   </section>
 
-  ${renderTopSessions(report)}
+  ${renderTopSessions(report, lang)}
 
   <footer>
-    由 dsh-dev-wrapped 生成 · 数据 100% 来自${dataSourceText}<br>
+    ${t(lang, 'footerGeneratedBy')} · ${dataSourceText}<br>
     ${fmtDateTime(report.generatedAt)}
   </footer>
 </div>
@@ -306,9 +281,13 @@ export function toHtmlReport(report: DevWrappedReport): string {
 }
 
 /** 写入 HTML 报告文件，返回文件绝对路径 */
-export async function writeHtmlReport(report: DevWrappedReport, outputDir: string): Promise<string> {
+export async function writeHtmlReport(
+  report: DevWrappedReport,
+  outputDir: string,
+  lang: Lang = 'zh',
+): Promise<string> {
   await fs.mkdir(outputDir, { recursive: true })
   const filePath = path.join(outputDir, `${reportBaseName(report)}.html`)
-  await fs.writeFile(filePath, toHtmlReport(report), 'utf8')
+  await fs.writeFile(filePath, toHtmlReport(report, lang), 'utf8')
   return filePath
 }

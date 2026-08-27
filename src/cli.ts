@@ -10,7 +10,10 @@ import { ClaudeCodeAdapter } from './adapters/claude-code.js'
 import { aggregate } from './stats/index.js'
 import { writeJsonReport, localDateKey } from './report/json.js'
 import { writeHtmlReport } from './report/html.js'
+import { writeStoryReport, reportTitle } from './report/story.js'
+import { estimateCost, fmtCost } from './cost.js'
 import { ZstdUnavailableError } from './parser/zstd.js'
+import type { Lang } from './i18n.js'
 import type { NormalizedEvent, SessionAdapter } from './types.js'
 
 /** 用法说明 */
@@ -22,8 +25,12 @@ const USAGE = `用法: dsh-dev-wrapped [选项]
   --claude-home <path>     Claude Code 数据目录（默认 ~/.claude）
   --output <dir>           输出目录（默认 ./reports）
   --json                   只输出 JSON，不生成 HTML
-  --since <YYYY-MM-DD>     起始日期（含），按会话 createdAt 本地时区过滤
-  --until <YYYY-MM-DD>     结束日期（含）
+  --compact                紧凑单页报告（默认为逐屏滚动叙事模式）
+  --year <YYYY>            年度回顾：等价于该年 1-1 ~ 12-31 的日期过滤
+  --lang <zh|en>           报告语言（默认 zh）
+  --estimate-cost          按 DeepSeek 单价估算成本（基于真实 token，标注"估算"）
+  --since <YYYY-MM-DD>     起始日期（含），按会话 createdAt 本地时区过滤；与 --year 互斥
+  --until <YYYY-MM-DD>     结束日期（含）；与 --year 互斥
   --include-subagents      并入子代理会话的工具调用统计
   --help, -h               显示帮助
 `
@@ -35,6 +42,10 @@ export interface CliOptions {
   claudeHome?: string
   output?: string
   json?: boolean
+  compact?: boolean
+  year?: string
+  lang?: string
+  estimateCost?: boolean
   since?: string
   until?: string
   includeSubagents?: boolean
@@ -57,6 +68,24 @@ export function parseArgs(argv: string[]): CliOptions {
       case '--include-subagents':
         opts.includeSubagents = true
         break
+      case '--compact':
+        opts.compact = true
+        break
+      case '--estimate-cost':
+        opts.estimateCost = true
+        break
+      case '--year': {
+        const v = takeValue(argv, i, a)
+        opts.year = v.value
+        i = v.next
+        break
+      }
+      case '--lang': {
+        const v = takeValue(argv, i, a)
+        opts.lang = v.value
+        i = v.next
+        break
+      }
       case '--dsh-home': {
         const v = takeValue(argv, i, a)
         opts.dshHome = v.value
@@ -172,7 +201,21 @@ export async function runCli(argv: string[]): Promise<number> {
   // 日期参数（本地时区解释）
   let since: number | undefined
   let until: number | undefined
+  // 年度模式：等价于该年 1-1 ~ 12-31；与 --since/--until 互斥
+  let yearMode: number | undefined
   try {
+    if (opts.year !== undefined) {
+      if (opts.since !== undefined || opts.until !== undefined) {
+        console.error('✖ --year 不能与 --since / --until 同时使用')
+        return 1
+      }
+      if (!/^\d{4}$/.test(opts.year) || Number(opts.year) < 1970 || Number(opts.year) > 2100) {
+        throw new Error(`无效的 --year 值: "${opts.year}"（应为 1970-2100 的四位数年份）`)
+      }
+      yearMode = Number(opts.year)
+      since = parseDateArg(`${yearMode}-01-01`, '--year', true)
+      until = parseDateArg(`${yearMode}-12-31`, '--year', false)
+    }
     if (opts.since !== undefined) since = parseDateArg(opts.since, '--since', true)
     if (opts.until !== undefined) until = parseDateArg(opts.until, '--until', false)
   } catch (err) {
@@ -183,6 +226,14 @@ export async function runCli(argv: string[]): Promise<number> {
     console.error('✖ --since 不能晚于 --until')
     return 1
   }
+
+  // 报告语言（默认中文）
+  if (opts.lang !== undefined && opts.lang !== 'zh' && opts.lang !== 'en') {
+    console.error(`✖ 无效的 --lang 值: ${opts.lang}（可选 zh / en）\n`)
+    console.error(USAGE)
+    return 1
+  }
+  const lang: Lang = opts.lang === 'en' ? 'en' : 'zh'
 
   const dshHome = opts.dshHome ?? path.join(os.homedir(), '.dsh')
   const claudeHome = opts.claudeHome ?? path.join(os.homedir(), '.claude')
@@ -222,9 +273,8 @@ export async function runCli(argv: string[]): Promise<number> {
     return 1
   }
 
-  // 适配器展示名（扫描提示与报告标题用）
+  // 适配器展示名（扫描提示用；报告标题由 reportTitle 按 yearMode/adapterId 决定）
   const adapterLabel = adapter.id === 'claude-code' ? 'Claude Code' : 'DSH'
-  const title = `${adapterLabel} Dev Wrapped`
 
   console.log(`🔍 扫描 ${adapterLabel} 会话数据...`)
   const files = await adapter.scan(dataRoot)
@@ -272,9 +322,19 @@ export async function runCli(argv: string[]): Promise<number> {
 
   console.log('📊 生成报告...')
   const report = aggregate(events, { includeSubagents: opts.includeSubagents, since, until })
-  // 数据根目录与适配器标识由 CLI 层覆盖（aggregate 默认按 DSH 填充）
+  // 数据根目录、适配器标识与年度模式由 CLI 层覆盖（aggregate 默认按 DSH 填充）
   report.dshHome = dataRoot
   report.adapterId = adapter.id
+  if (yearMode !== undefined) report.yearMode = yearMode
+
+  // 成本估算：显式开启且 tokens 完整时计算（tokens 缺失则提示跳过，绝不估算 token）
+  if (opts.estimateCost) {
+    if (report.overview.tokens) {
+      report.costEstimate = estimateCost(report.overview.tokens)
+    } else {
+      console.log('ℹ️ 已跳过成本估算：本批会话缺少 token 用量记录')
+    }
+  }
 
   if (report.overview.totalSessions === 0) {
     console.log('📂 指定范围内没有会话数据')
@@ -286,11 +346,11 @@ export async function runCli(argv: string[]): Promise<number> {
   const endDate = localDateKey(report.timeRange.end)
   const top5 = report.toolUsage
     .slice(0, 5)
-    .map((t) => t.name)
+    .map((tool) => tool.name)
     .join(' · ')
   const sep = '═'.repeat(39)
   console.log(sep)
-  console.log(`  ${title}`)
+  console.log(`  ${reportTitle(report, lang)}`)
   console.log(`  ${startDate} → ${endDate}（${report.timeRange.days} 天）`)
   console.log(sep)
   console.log(`  ${padEnd('会话总数', 12)}${report.overview.totalSessions.toLocaleString('zh-CN')}`)
@@ -298,12 +358,18 @@ export async function runCli(argv: string[]): Promise<number> {
   console.log(`  ${padEnd('工具调用', 12)}${report.overview.totalToolCalls.toLocaleString('zh-CN')}`)
   console.log(`  ${padEnd('活跃天数', 12)}${report.overview.activeDays.toLocaleString('zh-CN')}`)
   if (top5) console.log(`  ${padEnd('TOP 5 工具', 12)}${top5}`)
+  if (report.costEstimate) {
+    console.log(`  ${padEnd('成本估算', 12)}${fmtCost(report.costEstimate.total)}（估算值）`)
+  }
 
   // ---------- 落盘 ----------
   if (!opts.json) {
-    const htmlPath = await writeHtmlReport(report, outputDir)
+    // 默认逐屏滚动叙事模式；--compact 输出紧凑单页
+    const htmlPath = opts.compact
+      ? await writeHtmlReport(report, outputDir, lang)
+      : await writeStoryReport(report, outputDir, lang)
     const absHtml = path.resolve(htmlPath)
-    console.log(`📄 报告已保存: ${absHtml}`)
+    console.log(`📄 报告已保存: ${absHtml}${opts.compact ? '' : '（story 模式，--compact 可切换单页）'}`)
     // 自动用默认浏览器打开 HTML 报告
     const openCmd = process.platform === 'win32' ? 'start ""' : process.platform === 'darwin' ? 'open' : 'xdg-open'
     exec(`${openCmd} "${absHtml}"`, (err) => {

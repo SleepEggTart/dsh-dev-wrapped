@@ -56,6 +56,23 @@ describe('parseArgs 带值选项', () => {
     expect(result.adapter).toBe('claude-code')
   })
 
+  it('--compact 为布尔开关', () => {
+    expect(parseArgs(['--compact']).compact).toBe(true)
+    expect(parseArgs([]).compact).toBeUndefined()
+  })
+
+  it('--estimate-cost 为布尔开关', () => {
+    expect(parseArgs(['--estimate-cost']).estimateCost).toBe(true)
+  })
+
+  it('--year 正确取后一个值', () => {
+    expect(parseArgs(['--year', '2026']).year).toBe('2026')
+  })
+
+  it('--lang 正确取后一个值', () => {
+    expect(parseArgs(['--lang', 'en']).lang).toBe('en')
+  })
+
   it('--claude-home 正确取后一个值', () => {
     const result = parseArgs(['--claude-home', '/custom/claude'])
     expect(result.claudeHome).toBe('/custom/claude')
