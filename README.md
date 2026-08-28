@@ -90,6 +90,7 @@ DSH 会话文件使用 zstd 压缩。工具会自动检测：
 
 选项:
   --adapter <id>           数据源适配器: dsh（默认）/ claude-code / all（合并两个数据源）/ auto（自动检测）
+                           （不传且为交互终端时，会弹出数据源选择菜单）
   --dsh-home <path>        DSH 数据目录（默认 ~/.dsh）
   --claude-home <path>     Claude Code 数据目录（默认 ~/.claude）
   --output <dir>           输出目录（默认 ./reports）

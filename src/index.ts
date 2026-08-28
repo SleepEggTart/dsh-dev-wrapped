@@ -37,8 +37,12 @@ export function apply(ctx: unknown): void {
 
   c.command('dev.wrapped', '生成 DSH/Claude Code 开发回顾报告')?.action(async (argv: string[]) => {
     try {
+      // 聊天环境无法应答终端交互菜单：未显式传 --adapter 时注入默认 dsh，
+      // 需要其他数据源请在命令后带参数（如 dev.wrapped --adapter all）
+      const args = Array.isArray(argv) ? argv : []
+      const effective = args.includes('--adapter') ? args : ['--adapter', 'dsh', ...args]
       // 复用 CLI 主流程：参数解析、扫描、聚合、报告落盘与自动打开
-      const code = await runCli(Array.isArray(argv) ? argv : [])
+      const code = await runCli(effective)
       return code
     } catch (err) {
       logger.error(`报告生成失败: ${(err as Error).message}`)

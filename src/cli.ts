@@ -4,6 +4,7 @@
 import * as os from 'node:os'
 import * as path from 'node:path'
 import * as fs from 'node:fs/promises'
+import * as readline from 'node:readline'
 import { exec } from 'node:child_process'
 import { DshAdapter } from './adapters/dsh.js'
 import { ClaudeCodeAdapter } from './adapters/claude-code.js'
@@ -20,7 +21,8 @@ import type { DevWrappedReport, NormalizedEvent, SessionAdapter, YearCompareMetr
 const USAGE = `用法: dsh-dev-wrapped [选项]
 
 选项:
-  --adapter <id>           数据源适配器: dsh（默认）/ claude-code / all（合并两个数据源）/ auto（自动检测）
+  --adapter <id>           数据源适配器: dsh / claude-code / all（合并两个数据源）/ auto（自动检测）
+                           （不传且为交互终端时，会弹出数据源选择菜单）
   --dsh-home <path>        DSH 数据目录（默认 ~/.dsh）
   --claude-home <path>     Claude Code 数据目录（默认 ~/.claude）
   --output <dir>           输出目录（默认 ./reports）
@@ -188,6 +190,48 @@ async function dirExists(dir: string): Promise<boolean> {
   }
 }
 
+/**
+ * 解析交互菜单输入：'1'/'2'/'3' → 对应数据源；空输入 → null（用默认）
+ * 导出供单测使用（非法输入也返回 null）
+ */
+export function parseAdapterChoice(input: string): 'dsh' | 'claude-code' | 'all' | null {
+  const trimmed = input.trim()
+  if (trimmed === '1' || trimmed === 'dsh') return 'dsh'
+  if (trimmed === '2' || trimmed === 'claude-code') return 'claude-code'
+  if (trimmed === '3' || trimmed === 'all') return 'all'
+  return null
+}
+
+/**
+ * 交互式数据源选择菜单（未显式传 --adapter 且 TTY 环境时触发）
+ * 返回用户选择；读取失败或超时按默认 dsh 处理
+ */
+async function promptAdapterChoice(): Promise<'dsh' | 'claude-code' | 'all'> {
+  console.log('🔍 请选择数据源：')
+  console.log('  1. DSH（~/.dsh/sessions）')
+  console.log('  2. Claude Code（~/.claude/projects）')
+  console.log('  3. 合并扫描（DSH + Claude Code）')
+  process.stdout.write('输入序号后回车（默认 1）：')
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, terminal: false })
+    let settled = false
+    const finish = (v: 'dsh' | 'claude-code' | 'all') => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      rl.close()
+      resolve(v)
+    }
+    // 60 秒无输入按默认处理（避免永久挂起）
+    const timer = setTimeout(() => {
+      console.log('')
+      finish('dsh')
+    }, 60_000)
+    rl.once('line', (line: string) => finish(parseAdapterChoice(line) ?? 'dsh'))
+    rl.once('close', () => finish('dsh'))
+  })
+}
+
 /** 构造年度对比指标：sessions / turns / toolCalls / activeDays（tokens 双方完整时追加） */
 function buildCompareMetrics(cur: DevWrappedReport, prev: DevWrappedReport): YearCompareMetric[] {
   const mk = (key: string, current: number, previous: number): YearCompareMetric => ({
@@ -285,7 +329,12 @@ export async function runCli(argv: string[]): Promise<number> {
   // ---------- 适配器选择 ----------
   /** 待扫描的适配器 × 数据根目录组合（--adapter all 时为两个） */
   let targets: Array<{ adapter: SessionAdapter; dataRoot: string }>
-  const adapterArg = opts.adapter ?? 'dsh'
+  // 未显式传 --adapter 且终端可交互：弹菜单让用户选数据源
+  // （脚本化调用 / 管道 / CI 等非 TTY 环境跳过，保持默认 dsh 不卡住）
+  let adapterArg = opts.adapter ?? 'dsh'
+  if (opts.adapter === undefined && process.stdin.isTTY) {
+    adapterArg = await promptAdapterChoice()
+  }
   if (adapterArg === 'dsh') {
     targets = [{ adapter: new DshAdapter(), dataRoot: dshHome }]
   } else if (adapterArg === 'claude-code') {

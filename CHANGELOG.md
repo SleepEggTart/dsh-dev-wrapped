@@ -1,5 +1,12 @@
 # dsh-dev-wrapped
 
+## 1.2.1
+
+### Patch Changes
+
+- 交互式数据源选择菜单：不传 `--adapter` 且为交互终端时，启动后弹出选择菜单（DSH / Claude Code / 合并扫描）；空回车默认 DSH，60 秒无输入自动按默认处理
+- 兼容性：脚本化调用 / 管道 / CI 等非 TTY 环境自动跳过菜单；DSH 插件内 `dev.wrapped` 命令注入默认数据源避免卡在菜单（显式传 `--adapter` 不受影响）
+
 ## 1.2.0
 
 ### Minor Changes
