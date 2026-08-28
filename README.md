@@ -26,13 +26,21 @@ JSON 数据 + 深色渐变 HTML 报告卡片
 
 ## 快速开始
 
-一条命令，零安装：
+方式一：DSH 插件安装（推荐）：
 
 ```bash
-npx dsh-dev-wrapped
+dsh plugin add github:SleepEggTart/dsh-dev-wrapped
+dev.wrapped
 ```
 
-> **确保使用最新版？** 加 `@latest`：`npx dsh-dev-wrapped@latest`
+方式二：克隆仓库本地运行（npm 包暂未发布，`npx dsh-dev-wrapped` 暂不可用）：
+
+```bash
+git clone https://github.com/SleepEggTart/dsh-dev-wrapped.git
+cd dsh-dev-wrapped
+pnpm install && pnpm build
+node bin/dsh-dev-wrapped.mjs
+```
 
 首次运行会自动扫描 `~/.dsh/sessions`，生成 HTML 报告并用浏览器打开。
 
@@ -95,7 +103,7 @@ DSH 会话文件使用 zstd 压缩。工具会自动检测：
 示例：只回顾 2026 年 8 月，并把子代理的调用算进来：
 
 ```bash
-npx dsh-dev-wrapped --since 2026-08-01 --until 2026-08-31 --include-subagents
+dsh-dev-wrapped --since 2026-08-01 --until 2026-08-31 --include-subagents
 ```
 
 示例：扫描 Claude Code 会话数据：
@@ -113,7 +121,7 @@ npx dsh-dev-wrapped --adapter auto
 示例：2026 年度回顾 + 成本估算 + 英文卡片：
 
 ```bash
-npx dsh-dev-wrapped --year 2026 --estimate-cost --lang en
+dsh-dev-wrapped --year 2026 --estimate-cost --lang en
 ```
 
 ## 统计口径

@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "dsh-dev-wrapped": "./bin/dsh-dev-wrapped.mjs"
+    "dsh-dev-wrapped": "bin/dsh-dev-wrapped.mjs"
   },
   "exports": {
     ".": {
