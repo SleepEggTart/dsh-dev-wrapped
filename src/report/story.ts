@@ -18,6 +18,35 @@ import { DEEPSEEK_PRICING, fmtCost } from '../cost.js'
 import { esc, fmt, fmtDuration, fmtTokens, fmtDateTime } from './format.js'
 import { localDateKey, reportBaseName } from './json.js'
 
+/** 徽章等级角标（v1.3.0：🥉铜 / 🥈银 / 🥇金） */
+const LEVEL_ICONS: Record<'bronze' | 'silver' | 'gold', string> = {
+  bronze: '🥉',
+  silver: '🥈',
+  gold: '🥇',
+}
+
+/** 按月聚合每日活动（v1.3.0 逐月回放用；按月份升序，仅含有活动的月份） */
+function aggregateMonths(daily: Array<{ date: string; sessions: number; toolCalls: number }>): Array<{
+  year: number
+  month: number
+  sessions: number
+  toolCalls: number
+}> {
+  const map = new Map<string, { year: number; month: number; sessions: number; toolCalls: number }>()
+  for (const d of daily) {
+    const [y, m] = d.date.split('-')
+    const key = `${y}-${m}`
+    let agg = map.get(key)
+    if (!agg) {
+      agg = { year: Number(y), month: Number(m), sessions: 0, toolCalls: 0 }
+      map.set(key, agg)
+    }
+    agg.sessions += d.sessions
+    agg.toolCalls += d.toolCalls
+  }
+  return [...map.values()].sort((a, b) => a.year - b.year || a.month - b.month)
+}
+
 /** 报告标题（品牌名或年度回顾，compact 与 story 共用口径） */
 export function reportTitle(report: DevWrappedReport, lang: Lang): string {
   if (report.yearMode !== undefined) {
@@ -241,22 +270,38 @@ export function toStoryReport(report: DevWrappedReport, lang: Lang = 'zh'): stri
     )
   }
 
-  // 12. 成就徽章墙（v1.1.0：有达成徽章才显示）
+  // 12. 成就徽章墙（v1.1.0：有达成徽章才显示；v1.3.0 等级角标 + 隐藏彩蛋）
   const earnedBadges = report.badges.filter((b) => b.earned)
+  // 分母只统计常规徽章（隐藏彩蛋不计入总数）
+  const regularTotal = report.badges.filter((b) => !b.hidden).length
   if (earnedBadges.length > 0) {
     screens.push(
       screen(`
-        <p class="lead">${t(lang, 'badgesTitle')} · ${t(lang, 'badgesSub', { n: earnedBadges.length, total: report.badges.length })}</p>
+        <p class="lead">${t(lang, 'badgesTitle')} · ${t(lang, 'badgesSub', { n: earnedBadges.length, total: regularTotal })}</p>
         <div class="badge-grid">
           ${earnedBadges
             .map(
               (b) =>
-                `<div class="badge"><div class="badge-icon">${BADGE_ICONS[b.id] ?? '🏅'}</div><div class="badge-name">${esc(t(lang, badgeNameKey(b.id)))}</div></div>`,
+                `<div class="badge"><div class="badge-icon">${BADGE_ICONS[b.id] ?? '🏅'}${b.level ? LEVEL_ICONS[b.level] : ''}</div><div class="badge-name">${esc(t(lang, badgeNameKey(b.id)))}</div></div>`,
             )
             .join('')}
         </div>
       `),
     )
+  }
+
+  // 12.5 逐月回放（v1.3.0：按月聚合 dailyActivity，每个月一屏迷你回顾）
+  {
+    const months = aggregateMonths(report.timeline.dailyActivity)
+    for (const m of months) {
+      screens.push(
+        screen(`
+          <p class="lead">${m.year} ${lang === 'zh' ? '年' : ''}${m.month}${lang === 'zh' ? ' 月' : ''}</p>
+          <div class="big">${fmt(m.toolCalls)}</div>
+          <p class="tail">${t(lang, 'storyMonthCalls')} · ${t(lang, 'storyMonthSessions', { n: m.sessions })}</p>
+        `),
+      )
+    }
   }
 
   // 13. 年度对比（v1.1.0：--compare 且上一年有数据）

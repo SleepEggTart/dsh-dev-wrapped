@@ -20,6 +20,9 @@ export const BADGE_ICONS: Record<string, string> = {
   productive: '⚡',
   marathon: '🏔️',
   'rock-solid': '🛡️',
+  /* v1.3.0 隐藏彩蛋徽章 */
+  '996-warning': '⏰',
+  '4am-club': '☕',
 }
 
 /** 徽章 id（kebab-case）→ i18n 名称键（badgeLateNight 等） */
@@ -56,7 +59,34 @@ const THRESHOLDS = {
   /** 稳如磐石：总调用 ≥ 100 且错误率 < 5% */
   solidMinCalls: 100,
   solidMaxErrorRate: 0.05,
+  /* v1.3.0 隐藏彩蛋徽章 */
+  /** 996 警告：连续活跃 ≥ 7 天且这些天日均调用 ≥ 50 */
+  streakDays: 7,
+  streakDailyCalls: 50,
 } as const
+
+/**
+ * v1.3.0 徽章等级阈值：达铜后按数值继续升银/金（未列出的徽章不分级）
+ * 铜级阈值复用 THRESHOLDS（原达成线），此处只定义银/金
+ */
+const LEVEL_THRESHOLDS: Record<string, { silver: number; gold: number }> = {
+  'late-night': { silver: 0.2, gold: 0.3 },
+  'tool-collector': { silver: 25, gold: 35 },
+  'weekend-warrior': { silver: 0.5, gold: 0.7 },
+  persistent: { silver: 30, gold: 60 },
+  chatterbox: { silver: 300, gold: 600 },
+  productive: { silver: 3000, gold: 6000 },
+  marathon: { silver: 6 * 60 * 60 * 1000, gold: 12 * 60 * 60 * 1000 },
+}
+
+/** 按徽章 id 与数值计算等级（未达铜级即未达成时返回 null） */
+export function computeBadgeLevel(id: string, value: number, earned: boolean): 'bronze' | 'silver' | 'gold' | null {
+  if (!earned || !(id in LEVEL_THRESHOLDS)) return null
+  const lv = LEVEL_THRESHOLDS[id]
+  if (value >= lv.gold) return 'gold'
+  if (value >= lv.silver) return 'silver'
+  return 'bronze'
+}
 
 /** 22:00 ~ 04:59 的峰值小时（夜猫子） */
 const NIGHT_OWL_HOURS = new Set([22, 23, 0, 1, 2, 3, 4])
@@ -157,5 +187,53 @@ export function computeBadges(report: DevWrappedReport): Badge[] {
     value: errorRate,
   })
 
+  // ---------- v1.3.0 隐藏彩蛋徽章（不计入解锁总数分母） ----------
+  // ⏰ 996 警告：连续活跃 ≥ 7 天且这些天日均调用 ≥ 50
+  const streak = longestActiveStreak(t.dailyActivity)
+  const streakDays = streak.days
+  const streakAvg = streak.days > 0 ? streak.totalCalls / streak.days : 0
+  badges.push({
+    id: '996-warning',
+    earned: streakDays >= THRESHOLDS.streakDays && streakAvg >= THRESHOLDS.streakDailyCalls,
+    value: streakDays,
+    hidden: true,
+  })
+
+  // ☕ 4AM 俱乐部：凌晨 3-5 点仍有工具调用
+  const dawnCalls = t.hourlyActivity[3] + t.hourlyActivity[4] + t.hourlyActivity[5]
+  badges.push({
+    id: '4am-club',
+    earned: dawnCalls > 0,
+    value: dawnCalls,
+    hidden: true,
+  })
+
+  // 填充等级（可量化徽章）
+  for (const b of badges) {
+    b.level = computeBadgeLevel(b.id, b.value, b.earned)
+  }
+
   return badges
+}
+
+/** 计算最长连续活跃天数（含该区间内的总调用数，供 996 警告日均计算） */
+function longestActiveStreak(daily: Array<{ date: string; toolCalls: number }>): {
+  days: number
+  totalCalls: number
+} {
+  if (daily.length === 0) return { days: 0, totalCalls: 0 }
+  const sorted = [...daily].sort((a, b) => a.date.localeCompare(b.date))
+  let best = { days: 1, totalCalls: sorted[0].toolCalls }
+  let cur = { days: 1, totalCalls: sorted[0].toolCalls }
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = new Date(sorted[i - 1].date + 'T00:00:00').getTime()
+    const now = new Date(sorted[i].date + 'T00:00:00').getTime()
+    if (now - prev === 86_400_000) {
+      cur = { days: cur.days + 1, totalCalls: cur.totalCalls + sorted[i].toolCalls }
+    } else {
+      cur = { days: 1, totalCalls: sorted[i].toolCalls }
+    }
+    if (cur.days > best.days) best = cur
+  }
+  return best
 }

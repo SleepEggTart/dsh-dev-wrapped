@@ -45,7 +45,7 @@ function makeReport(patch: Partial<DevWrappedReport> = {}): DevWrappedReport {
 describe('computeBadges 阈值', () => {
   it('无任何数据时全部未达成', () => {
     const badges = computeBadges(makeReport())
-    expect(badges).toHaveLength(11)
+    expect(badges).toHaveLength(13)
     expect(badges.filter((b) => b.earned)).toHaveLength(0)
   })
 

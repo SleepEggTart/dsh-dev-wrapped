@@ -163,6 +163,10 @@ export interface Badge {
   earned: boolean
   /** 达成进度描述用的原始值（如占比/数量），渲染层按徽章语义使用 */
   value: number
+  /** 等级（v1.3.0：可量化徽章按阈值分级；未达成或无等级徽章为 null） */
+  level?: 'bronze' | 'silver' | 'gold' | null
+  /** 隐藏彩蛋徽章（v1.3.0：不计入解锁总数分母；未达成时不渲染） */
+  hidden?: boolean
 }
 
 /** 数据源分布（v1.2.0：--adapter all 合并报告时按会话归属统计） */

@@ -9,9 +9,10 @@ import { exec } from 'node:child_process'
 import { DshAdapter } from './adapters/dsh.js'
 import { ClaudeCodeAdapter } from './adapters/claude-code.js'
 import { aggregate } from './stats/index.js'
-import { writeJsonReport, localDateKey } from './report/json.js'
+import { writeJsonReport, localDateKey, reportBaseName } from './report/json.js'
 import { writeHtmlReport } from './report/html.js'
 import { writeStoryReport, reportTitle } from './report/story.js'
+import { buildSummaryPrompt } from './aiprompt.js'
 import { estimateCost, fmtCost } from './cost.js'
 import { ZstdUnavailableError } from './parser/zstd.js'
 import type { Lang } from './i18n.js'
@@ -519,5 +520,9 @@ export async function runCli(argv: string[]): Promise<number> {
   }
   const jsonPath = await writeJsonReport(report, outputDir)
   console.log(`📋 JSON 数据:   ${path.resolve(jsonPath)}`)
+  // AI 总结 prompt（v1.3.0）：结构化 prompt 落盘，用户复制贴回自己的 AI CLI 生成本地总结
+  const promptPath = path.join(outputDir, `${reportBaseName(report)}-prompt.txt`)
+  await fs.writeFile(promptPath, buildSummaryPrompt(report, lang), 'utf8')
+  console.log(`🤖 AI 总结:    ${path.resolve(promptPath)}（贴回你的 AI CLI 生成本地年度总结）`)
   return 0
 }

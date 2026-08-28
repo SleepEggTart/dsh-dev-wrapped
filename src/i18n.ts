@@ -132,6 +132,14 @@ const zh = {
   badgeMarathonDesc: '最长会话 {dur}',
   badgeRockSolid: '稳如磐石',
   badgeRockSolidDesc: '整体错误率仅 {pct}',
+  /* ---------- v1.3.0：隐藏彩蛋徽章 ---------- */
+  badge996Warning: '996 警告',
+  badge996WarningDesc: '连续 {n} 天活跃且日均调用 ≥ 50 次，注意休息',
+  badge4amClub: '4AM 俱乐部',
+  badge4amClubDesc: '凌晨 3-5 点仍有 {n} 次工具调用',
+  /* ---------- v1.3.0：逐月回放 ---------- */
+  storyMonthCalls: '次工具调用',
+  storyMonthSessions: '{n} 个活跃会话',
   /* ---------- v1.1.0：年度对比 ---------- */
   compareTitle: '📈 年度成长',
   compareSub: '{cur} vs {prev}',
@@ -287,6 +295,14 @@ const en: Record<keyof typeof zh, string> = {
   badgeMarathonDesc: 'Longest session {dur}',
   badgeRockSolid: 'Rock Solid',
   badgeRockSolidDesc: 'Overall error rate only {pct}',
+  /* ---------- v1.3.0：隐藏彩蛋徽章 ---------- */
+  badge996Warning: '996 Warning',
+  badge996WarningDesc: 'Active {n} days straight, ≥50 calls/day — take a break',
+  badge4amClub: '4AM Club',
+  badge4amClubDesc: '{n} tool calls between 3-5 AM',
+  /* ---------- v1.3.0：逐月回放 ---------- */
+  storyMonthCalls: 'tool calls',
+  storyMonthSessions: '{n} active sessions',
   /* ---------- v1.1.0：年度对比 ---------- */
   compareTitle: '📈 Year-over-Year',
   compareSub: '{cur} vs {prev}',

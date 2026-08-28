@@ -1,6 +1,6 @@
 {
   "name": "dsh-dev-wrapped",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "Developer Wrapped for DeepSeek Harness — your coding journey with AI, visualized.",
   "type": "module",
   "main": "dist/index.js",

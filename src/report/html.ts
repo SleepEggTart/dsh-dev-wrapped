@@ -166,10 +166,19 @@ function renderSourceDist(report: DevWrappedReport, lang: Lang): string {
     </section>`
 }
 
-/** 徽章小节（v1.1.0：compact 模式，展示达成的徽章及达成条件描述） */
+/** 徽章等级角标（v1.3.0：🥉铜 / 🥈银 / 🥇金，与 story 保持一致） */
+const LEVEL_ICONS: Record<'bronze' | 'silver' | 'gold', string> = {
+  bronze: '🥉',
+  silver: '🥈',
+  gold: '🥇',
+}
+
+/** 徽章小节（v1.1.0：compact 模式，展示达成的徽章及达成条件描述；v1.3.0 等级角标） */
 function renderBadges(report: DevWrappedReport, lang: Lang): string {
   const earned = report.badges.filter((b) => b.earned)
-  const sub = t(lang, 'badgesSub', { n: earned.length, total: report.badges.length })
+  // 分母只统计常规徽章（隐藏彩蛋不计入总数）
+  const regularTotal = report.badges.filter((b) => !b.hidden).length
+  const sub = t(lang, 'badgesSub', { n: earned.length, total: regularTotal })
   if (earned.length === 0) {
     return `
     <section class="card">
@@ -179,7 +188,7 @@ function renderBadges(report: DevWrappedReport, lang: Lang): string {
   }
   const items = earned
     .map((b) => {
-      const icon = BADGE_ICONS[b.id] ?? '🏅'
+      const icon = (BADGE_ICONS[b.id] ?? '🏅') + (b.level ? LEVEL_ICONS[b.level] : '')
       const name = t(lang, badgeNameKey(b.id))
       const desc = badgeDescText(b, lang)
       return `<div class="badge-chip"><span class="badge-ico">${icon}</span><span class="badge-txt"><b>${esc(name)}</b><small>${esc(desc)}</small></span></div>`
