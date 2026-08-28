@@ -43,6 +43,7 @@ const baseReport: DevWrappedReport = {
     favoriteWorkspace: null,
   },
   topSessions: [],
+  badges: [],
 }
 
 describe('toHtmlReport 基本渲染', () => {
@@ -73,6 +74,41 @@ describe('toHtmlReport 基本渲染', () => {
 
   it('tokens 为 null 时展示兜底文案', () => {
     expect(html).toContain('部分会话缺少用量记录')
+  })
+
+  it('v1.1.0：徽章小节与年度对比小节渲染', () => {
+    // badges: []（未达成）时显示鼓励文案
+    expect(html).toContain('继续使用，徽章等着你解锁')
+    // 达成徽章时渲染 chip 与描述
+    const withBadges: DevWrappedReport = {
+      ...baseReport,
+      badges: [
+        { id: 'night-owl', earned: true, value: 23 },
+        { id: 'marathon', earned: true, value: 7_200_000 },
+      ],
+    }
+    const html2 = toHtmlReport(withBadges)
+    expect(html2).toContain('badge-chips')
+    expect(html2).toContain('夜猫子')
+    expect(html2).toContain('活跃高峰在 23:00')
+    expect(html2).toContain('最长会话 2 小时')
+    // yearComparison 存在时渲染对比表
+    const withCompare: DevWrappedReport = {
+      ...withBadges,
+      yearComparison: {
+        currentYear: 2026,
+        previousYear: 2025,
+        metrics: [
+          { key: 'sessions', current: 18, previous: 9, delta: 1.0 },
+          { key: 'turns', current: 162, previous: 0, delta: null },
+        ],
+      },
+    }
+    const html3 = toHtmlReport(withCompare)
+    expect(html3).toContain('2026 vs 2025')
+    expect(html3).toContain('+100%')
+    expect(html3).toContain('全新起步')
+    expect(html).not.toContain('2026 vs 2025')
   })
 })
 

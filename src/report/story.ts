@@ -11,7 +11,8 @@ import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import type { DevWrappedReport } from '../types.js'
 import type { Lang } from '../i18n.js'
-import { t } from '../i18n.js'
+import { t, compareMetricKey } from '../i18n.js'
+import { BADGE_ICONS, badgeNameKey } from '../badges.js'
 import { DEEPSEEK_PRICING, fmtCost } from '../cost.js'
 import { esc, fmt, fmtDuration, fmtTokens, fmtDateTime } from './format.js'
 import { localDateKey, reportBaseName } from './json.js'
@@ -200,7 +201,47 @@ export function toStoryReport(report: DevWrappedReport, lang: Lang = 'zh'): stri
     }
   }
 
-  // 9. 尾屏
+  // 12. 成就徽章墙（v1.1.0：有达成徽章才显示）
+  const earnedBadges = report.badges.filter((b) => b.earned)
+  if (earnedBadges.length > 0) {
+    screens.push(
+      screen(`
+        <p class="lead">${t(lang, 'badgesTitle')} · ${t(lang, 'badgesSub', { n: earnedBadges.length, total: report.badges.length })}</p>
+        <div class="badge-grid">
+          ${earnedBadges
+            .map(
+              (b) =>
+                `<div class="badge"><div class="badge-icon">${BADGE_ICONS[b.id] ?? '🏅'}</div><div class="badge-name">${esc(t(lang, badgeNameKey(b.id)))}</div></div>`,
+            )
+            .join('')}
+        </div>
+      `),
+    )
+  }
+
+  // 13. 年度对比（v1.1.0：--compare 且上一年有数据）
+  if (report.yearComparison) {
+    const cmp = report.yearComparison
+    screens.push(
+      screen(`
+        <p class="lead">${t(lang, 'compareTitle')} · ${t(lang, 'compareSub', { cur: cmp.currentYear, prev: cmp.previousYear })}</p>
+        <div class="cmp-list">
+          ${cmp.metrics
+            .map((m) => {
+              const label = t(lang, compareMetricKey(m.key))
+              const delta =
+                m.delta === null
+                  ? `<span class="delta new">${t(lang, 'compareNewStart')}</span>`
+                  : `<span class="delta ${m.delta >= 0 ? 'up' : 'down'}">${m.delta >= 0 ? '+' : ''}${(m.delta * 100).toFixed(0)}%</span>`
+              return `<div class="cmp-row"><span class="cmp-label">${label}</span><span class="cmp-nums">${fmt(m.previous)} → ${fmt(m.current)}</span>${delta}</div>`
+            })
+            .join('')}
+        </div>
+      `),
+    )
+  }
+
+  // 尾屏
   screens.push(
     screen(`
       <p class="lead">${t(lang, 'storyFinalLead', { n: overview.activeDays })}</p>
@@ -268,6 +309,32 @@ export function toStoryReport(report: DevWrappedReport, lang: Lang = 'zh'): stri
   .tail { margin-top: 14px; font-size: clamp(1rem, 3vw, 1.3rem); color: var(--text); }
   .note { margin-top: 12px; font-size: .8rem; color: var(--muted); }
   footer { margin-top: 40px; font-size: .78rem; color: var(--muted); line-height: 1.8; }
+
+  /* v1.1.0 徽章墙 */
+  .badge-grid {
+    display: flex; flex-wrap: wrap; gap: 14px; justify-content: center;
+    max-width: 640px; margin: 18px auto 0;
+  }
+  .badge {
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14);
+    border-radius: 14px; padding: 14px 18px; min-width: 104px;
+  }
+  .badge-icon { font-size: 2rem; line-height: 1.2; }
+  .badge-name { margin-top: 6px; font-size: .9rem; color: var(--text); }
+
+  /* v1.1.0 年度对比 */
+  .cmp-list { max-width: 560px; margin: 18px auto 0; text-align: left; }
+  .cmp-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 10px 4px; border-bottom: 1px solid rgba(255,255,255,.1);
+    font-size: clamp(.95rem, 2.6vw, 1.1rem);
+  }
+  .cmp-label { color: var(--muted); }
+  .cmp-nums { font-variant-numeric: tabular-nums; }
+  .delta { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 64px; text-align: right; }
+  .delta.up { color: #6ee7a0; }
+  .delta.down { color: #ff9e9e; }
+  .delta.new { color: #ffd479; font-size: .85em; }
 </style>
 </head>
 <body>

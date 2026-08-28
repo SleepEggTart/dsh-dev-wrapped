@@ -153,6 +153,35 @@ export interface AgentPresetStat {
   sessions: number
 }
 
+/** 成就徽章（v1.1.0：基于报告数据纯函数计算） */
+export interface Badge {
+  /** 徽章标识（i18n 文案 key，如 'late-night'） */
+  id: string
+  /** 是否达成 */
+  earned: boolean
+  /** 达成进度描述用的原始值（如占比/数量），渲染层按徽章语义使用 */
+  value: number
+}
+
+/** 年度对比单指标（v1.1.0：--compare 双年聚合） */
+export interface YearCompareMetric {
+  /** 指标识：sessions / turns / toolCalls / activeDays / tokens */
+  key: string
+  /** 本年值 */
+  current: number
+  /** 上一年值 */
+  previous: number
+  /** (current - previous) / previous，保留 4 位小数；上一年为 0 且本年 > 0 时为 null（无法算百分比） */
+  delta: number | null
+}
+
+/** 年度对比结果（--compare 开启且上一年有数据时才有值） */
+export interface YearComparison {
+  currentYear: number
+  previousYear: number
+  metrics: Array<YearCompareMetric>
+}
+
 /** 时间线统计 */
 export interface TimelineStats {
   /** 长度 24，tool/call 按小时分布 */
@@ -217,4 +246,8 @@ export interface DevWrappedReport {
   timeline: TimelineStats
   highlights: Highlights
   topSessions: Array<TopSession>
+  /** 成就徽章（v1.1.0：CLI 层聚合后计算填入） */
+  badges: Array<Badge>
+  /** 年度对比（v1.1.0：--compare 开启且上一年有数据时才有值） */
+  yearComparison?: YearComparison
 }

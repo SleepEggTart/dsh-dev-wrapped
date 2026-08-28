@@ -104,6 +104,41 @@ const zh = {
   storyUnstableToolSub: '{errors} 次失败 / 共 {calls} 次调用（错误率 {rate}%）',
   storyFinalLead: '你在 {n} 个日子里与 AI 并肩作战',
   storyFinalSub: '期待下一段旅程 ✨',
+  /* ---------- v1.1.0：成就徽章 ---------- */
+  badgesTitle: '🏅 成就徽章',
+  badgesSub: '解锁 {n} / {total} 枚',
+  noBadgeEarned: '继续使用，徽章等着你解锁',
+  badgeLateNight: '深夜代码手',
+  badgeLateNightDesc: '深夜（0-6 点）调用占比 {pct}',
+  badgeNightOwl: '夜猫子',
+  badgeNightOwlDesc: '活跃高峰在 {hh}:00',
+  badgeEarlyBird: '晨间开发者',
+  badgeEarlyBirdDesc: '活跃高峰在 {hh}:00',
+  badgeToolCollector: '工具收藏家',
+  badgeToolCollectorDesc: '用过 {n} 种工具',
+  badgeMultiCategory: '多面手',
+  badgeMultiCategoryDesc: '覆盖 {n} 类工具',
+  badgeWeekendWarrior: '周末战士',
+  badgeWeekendWarriorDesc: '周末调用占比 {pct}',
+  badgePersistent: '持之以恒',
+  badgePersistentDesc: '活跃 {n} 天',
+  badgeChatterbox: '话痨',
+  badgeChatterboxDesc: '{n} 轮对话',
+  badgeProductive: '高产选手',
+  badgeProductiveDesc: '{n} 次工具调用',
+  badgeMarathon: '马拉松选手',
+  badgeMarathonDesc: '最长会话 {dur}',
+  badgeRockSolid: '稳如磐石',
+  badgeRockSolidDesc: '整体错误率仅 {pct}',
+  /* ---------- v1.1.0：年度对比 ---------- */
+  compareTitle: '📈 年度成长',
+  compareSub: '{cur} vs {prev}',
+  compareSessions: '会话',
+  compareTurns: '轮次',
+  compareToolCalls: '工具调用',
+  compareActiveDays: '活跃天数',
+  compareTokens: 'Token',
+  compareNewStart: '全新起步',
   /* ---------- 其他 ---------- */
   empty: '—',
 }
@@ -203,12 +238,62 @@ const en: Record<keyof typeof zh, string> = {
   storyUnstableToolSub: '{errors} failures / {calls} calls ({rate}% error rate)',
   storyFinalLead: 'You coded with AI on {n} days',
   storyFinalSub: 'See you next journey ✨',
+  /* ---------- v1.1.0：成就徽章 ---------- */
+  badgesTitle: '🏅 Achievements',
+  badgesSub: '{n} / {total} unlocked',
+  noBadgeEarned: 'Keep going — badges await unlocking',
+  badgeLateNight: 'Late-Night Coder',
+  badgeLateNightDesc: '{pct} of calls between 0-6 AM',
+  badgeNightOwl: 'Night Owl',
+  badgeNightOwlDesc: 'Peak activity at {hh}:00',
+  badgeEarlyBird: 'Early Bird',
+  badgeEarlyBirdDesc: 'Peak activity at {hh}:00',
+  badgeToolCollector: 'Tool Collector',
+  badgeToolCollectorDesc: 'Used {n} different tools',
+  badgeMultiCategory: 'Jack of All Trades',
+  badgeMultiCategoryDesc: 'Covered {n} tool categories',
+  badgeWeekendWarrior: 'Weekend Warrior',
+  badgeWeekendWarriorDesc: '{pct} of calls on weekends',
+  badgePersistent: 'Persistent',
+  badgePersistentDesc: 'Active on {n} days',
+  badgeChatterbox: 'Chatterbox',
+  badgeChatterboxDesc: '{n} turns of conversation',
+  badgeProductive: 'Productive',
+  badgeProductiveDesc: '{n} tool calls',
+  badgeMarathon: 'Marathoner',
+  badgeMarathonDesc: 'Longest session {dur}',
+  badgeRockSolid: 'Rock Solid',
+  badgeRockSolidDesc: 'Overall error rate only {pct}',
+  /* ---------- v1.1.0：年度对比 ---------- */
+  compareTitle: '📈 Year-over-Year',
+  compareSub: '{cur} vs {prev}',
+  compareSessions: 'Sessions',
+  compareTurns: 'Turns',
+  compareToolCalls: 'Tool Calls',
+  compareActiveDays: 'Active Days',
+  compareTokens: 'Tokens',
+  compareNewStart: 'Brand New',
   /* ---------- 其他 ---------- */
   empty: '—',
 }
 
 /** 文案表：语言 → 键 → 文案 */
 export const STRINGS: Record<Lang, Record<string, string>> = { zh, en }
+
+/** 中文文案表的键类型（渲染层动态构造 key 时用于类型收敛） */
+export type StringsKey = keyof typeof zh
+
+/** 年度对比指标 key（sessions/turns/...）→ 文案键（compareSessions/...） */
+export function compareMetricKey(key: string): StringsKey {
+  const map: Record<string, StringsKey> = {
+    sessions: 'compareSessions',
+    turns: 'compareTurns',
+    toolCalls: 'compareToolCalls',
+    activeDays: 'compareActiveDays',
+    tokens: 'compareTokens',
+  }
+  return map[key] ?? 'empty'
+}
 
 /**
  * 取文案并替换 {name} 占位符。

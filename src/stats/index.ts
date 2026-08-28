@@ -20,6 +20,7 @@ import type {
   TopSession,
 } from '../types.js'
 import { toolCategory } from '../tools.js'
+import { computeBadges } from '../badges.js'
 
 /** 统计选项 */
 export interface StatsOptions {
@@ -404,10 +405,11 @@ export function aggregate(events: NormalizedEvent[], opts: StatsOptions = {}): D
   // 活跃天数与 dailyActivity 口径一致：会话创建日 ∪ 工具调用日
   const activeDays = allDays.size
 
-  return {
+  const report: DevWrappedReport = {
     generatedAt: Date.now(),
     dshHome: '', // 由 CLI 层填充
     adapterId: 'dsh',
+    badges: [], // 占位，下方 computeBadges 统一填充
     timeRange: { start: rangeStart, end: rangeEnd, days },
     overview: {
       totalSessions,
@@ -440,4 +442,7 @@ export function aggregate(events: NormalizedEvent[], opts: StatsOptions = {}): D
     highlights,
     topSessions,
   }
+  // 成就徽章：报告构造完成后统一计算（badges 依赖完整报告数据）
+  report.badges = computeBadges(report)
+  return report
 }

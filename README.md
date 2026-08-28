@@ -20,6 +20,8 @@ JSON 数据 + 深色渐变 HTML 报告卡片
 - **适配器架构**：解析层与统计层通过 `NormalizedEvent` 解耦，支持 DSH 和 Claude Code 等多种数据源
 - **逐屏叙事报告**：Spotify Wrapped 风格 scroll-snap 逐屏回顾（默认），`--compact` 切换紧凑单页
 - **统计深化**：工具错误率排行、深夜（0-6 点）编码占比、工作日/周末分布、模型分布、DSH agentPreset 分布
+- **成就徽章**：11 枚游戏化徽章（深夜代码手 / 夜猫子 / 工具收藏家 / 周末战士 / 马拉松选手……），基于统计自动解锁
+- **年度对比**：`--compare` 对比今年与去年（会话 / 轮次 / 工具调用 / 活跃天数 / Token），展示成长曲线
 - **多语言**：`--lang en` 输出英文报告卡片，方便海外分享
 - **单文件 HTML**：纯 CSS 图表（条形图 / 24h 柱状图），无外部资源，手机与桌面均美观
 - **工程完备**：GitHub Actions CI（Node 18/20/22 矩阵）+ changesets 版本管理 + fuzz 容错测试（损坏 zstd / 截断文件 / 垃圾行）
@@ -92,6 +94,7 @@ DSH 会话文件使用 zstd 压缩。工具会自动检测：
   --json                   只输出 JSON，不生成 HTML
   --compact                紧凑单页报告（默认为逐屏滚动叙事模式）
   --year <YYYY>            年度回顾：等价于该年 1-1 ~ 12-31 的日期过滤
+  --compare                年度对比：配合 --year（缺省为当前年份），对比该年与上一年
   --lang <zh|en>           报告语言（默认 zh）
   --estimate-cost          按 DeepSeek 单价估算成本（基于真实 token，标注"估算"）
   --since <YYYY-MM-DD>     起始日期（含），按会话 createdAt 本地时区过滤；与 --year 互斥
@@ -115,13 +118,19 @@ npx dsh-dev-wrapped --adapter claude-code
 示例：自动检测数据源（优先 DSH）：
 
 ```bash
-npx dsh-dev-wrapped --adapter auto
+dsh-dev-wrapped --adapter auto
 ```
 
 示例：2026 年度回顾 + 成本估算 + 英文卡片：
 
 ```bash
 dsh-dev-wrapped --year 2026 --estimate-cost --lang en
+```
+
+示例：年度对比（2026 vs 2025，上一年无数据时自动跳过）：
+
+```bash
+dsh-dev-wrapped --year 2026 --compare
 ```
 
 ## 统计口径

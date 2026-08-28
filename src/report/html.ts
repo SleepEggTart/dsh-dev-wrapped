@@ -8,9 +8,10 @@
  */
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import type { DevWrappedReport } from '../types.js'
+import type { Badge, DevWrappedReport } from '../types.js'
 import type { Lang } from '../i18n.js'
-import { t } from '../i18n.js'
+import { t, compareMetricKey } from '../i18n.js'
+import { BADGE_ICONS, badgeNameKey, badgeDescKey } from '../badges.js'
 import { DEEPSEEK_PRICING, fmtCost } from '../cost.js'
 import { esc, fmt, fmtDuration, fmtTokens, fmtDateTime } from './format.js'
 import { localDateKey, reportBaseName } from './json.js'
@@ -128,6 +129,72 @@ function renderToolStability(report: DevWrappedReport, lang: Lang): string {
     </section>`
 }
 
+/** 徽章小节（v1.1.0：compact 模式，展示达成的徽章及达成条件描述） */
+function renderBadges(report: DevWrappedReport, lang: Lang): string {
+  const earned = report.badges.filter((b) => b.earned)
+  const sub = t(lang, 'badgesSub', { n: earned.length, total: report.badges.length })
+  if (earned.length === 0) {
+    return `
+    <section class="card">
+      <h2>${t(lang, 'badgesTitle')}<span class="sub">${sub}</span></h2>
+      <p class="empty">${t(lang, 'noBadgeEarned')}</p>
+    </section>`
+  }
+  const items = earned
+    .map((b) => {
+      const icon = BADGE_ICONS[b.id] ?? '🏅'
+      const name = t(lang, badgeNameKey(b.id))
+      const desc = badgeDescText(b, lang)
+      return `<div class="badge-chip"><span class="badge-ico">${icon}</span><span class="badge-txt"><b>${esc(name)}</b><small>${esc(desc)}</small></span></div>`
+    })
+    .join('')
+  return `
+    <section class="card">
+      <h2>${t(lang, 'badgesTitle')}<span class="sub">${sub}</span></h2>
+      <div class="badge-chips">${items}</div>
+    </section>`
+}
+
+/** 徽章达成条件的描述文案（按徽章语义格式化 value） */
+function badgeDescText(b: Badge, lang: Lang): string {
+  switch (b.id) {
+    case 'late-night':
+    case 'weekend-warrior':
+    case 'rock-solid':
+      return t(lang, badgeDescKey(b.id), { pct: `${Math.round(b.value * 100)}%` })
+    case 'night-owl':
+    case 'early-bird':
+      return t(lang, badgeDescKey(b.id), { hh: b.value >= 0 ? String(b.value).padStart(2, '0') : '--' })
+    case 'marathon':
+      return t(lang, badgeDescKey(b.id), { dur: fmtDuration(b.value, lang) })
+    default:
+      return t(lang, badgeDescKey(b.id), { n: fmt(b.value) })
+  }
+}
+
+/** 年度对比小节（v1.1.0：--compare 且上一年有数据） */
+function renderYearComparison(report: DevWrappedReport, lang: Lang): string {
+  const cmp = report.yearComparison
+  if (!cmp) return ''
+  const rows = cmp.metrics
+    .map((m) => {
+      const delta =
+        m.delta === null
+          ? `<span class="delta new">${t(lang, 'compareNewStart')}</span>`
+          : `<span class="delta ${m.delta >= 0 ? 'up' : 'down'}">${m.delta >= 0 ? '+' : ''}${(m.delta * 100).toFixed(0)}%</span>`
+      return `<tr><td>${t(lang, compareMetricKey(m.key))}</td><td class="num">${fmt(m.previous)}</td><td class="num">${fmt(m.current)}</td><td class="num">${delta}</td></tr>`
+    })
+    .join('')
+  return `
+    <section class="card">
+      <h2>${t(lang, 'compareTitle')}<span class="sub">${t(lang, 'compareSub', { cur: cmp.currentYear, prev: cmp.previousYear })}</span></h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th></th><th class="num">${cmp.previousYear}</th><th class="num">${cmp.currentYear}</th><th class="num">Δ</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    </section>`
+}
+
 /** 生成完整 HTML 报告（compact 紧凑单页模式） */
 export function toHtmlReport(report: DevWrappedReport, lang: Lang = 'zh'): string {
   const { overview, timeline, fileOps } = report
@@ -236,6 +303,21 @@ export function toHtmlReport(report: DevWrappedReport, lang: Lang = 'zh'): strin
   footer { text-align: center; color: var(--muted); font-size: .78rem; margin-top: 10px; line-height: 1.8; }
   .empty { color: var(--muted); font-size: .9rem; }
 
+  /* v1.1.0 徽章与年度对比 */
+  .badge-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .badge-chip {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,.05); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 10px 14px;
+  }
+  .badge-ico { font-size: 1.5rem; line-height: 1; }
+  .badge-txt { display: flex; flex-direction: column; }
+  .badge-txt small { color: var(--muted); font-size: .72rem; margin-top: 2px; }
+  .delta { font-weight: 700; }
+  .delta.up { color: #6ee7a0; }
+  .delta.down { color: #ff9e9e; }
+  .delta.new { color: #ffd479; }
+
   @media (max-width: 640px) {
     .bar-row { grid-template-columns: 20px 90px 1fr 54px; font-size: .8rem; }
     .hours { gap: 2px; }
@@ -319,9 +401,13 @@ export function toHtmlReport(report: DevWrappedReport, lang: Lang = 'zh'): strin
     </div>
   </section>
 
+  ${renderBadges(report, lang)}
+
   ${renderToolStability(report, lang)}
 
   ${renderTopSessions(report, lang)}
+
+  ${renderYearComparison(report, lang)}
 
   <footer>
     ${t(lang, 'footerGeneratedBy')} · ${dataSourceText}<br>

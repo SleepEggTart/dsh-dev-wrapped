@@ -14,7 +14,7 @@ import { writeStoryReport, reportTitle } from './report/story.js'
 import { estimateCost, fmtCost } from './cost.js'
 import { ZstdUnavailableError } from './parser/zstd.js'
 import type { Lang } from './i18n.js'
-import type { NormalizedEvent, SessionAdapter } from './types.js'
+import type { DevWrappedReport, NormalizedEvent, SessionAdapter, YearCompareMetric } from './types.js'
 
 /** 用法说明 */
 const USAGE = `用法: dsh-dev-wrapped [选项]
@@ -27,6 +27,7 @@ const USAGE = `用法: dsh-dev-wrapped [选项]
   --json                   只输出 JSON，不生成 HTML
   --compact                紧凑单页报告（默认为逐屏滚动叙事模式）
   --year <YYYY>            年度回顾：等价于该年 1-1 ~ 12-31 的日期过滤
+  --compare                年度对比：配合 --year（缺省为当前年份），对比该年与上一年
   --lang <zh|en>           报告语言（默认 zh）
   --estimate-cost          按 DeepSeek 单价估算成本（基于真实 token，标注"估算"）
   --since <YYYY-MM-DD>     起始日期（含），按会话 createdAt 本地时区过滤；与 --year 互斥
@@ -44,6 +45,7 @@ export interface CliOptions {
   json?: boolean
   compact?: boolean
   year?: string
+  compare?: boolean
   lang?: string
   estimateCost?: boolean
   since?: string
@@ -70,6 +72,9 @@ export function parseArgs(argv: string[]): CliOptions {
         break
       case '--compact':
         opts.compact = true
+        break
+      case '--compare':
+        opts.compare = true
         break
       case '--estimate-cost':
         opts.estimateCost = true
@@ -183,6 +188,33 @@ async function dirExists(dir: string): Promise<boolean> {
   }
 }
 
+/** 构造年度对比指标：sessions / turns / toolCalls / activeDays（tokens 双方完整时追加） */
+function buildCompareMetrics(cur: DevWrappedReport, prev: DevWrappedReport): YearCompareMetric[] {
+  const mk = (key: string, current: number, previous: number): YearCompareMetric => ({
+    key,
+    current,
+    previous,
+    // 上一年为 0 时无法计算百分比（本年 > 0 视为全新起步），delta 记 null
+    delta: previous > 0 ? Math.round(((current - previous) / previous) * 10_000) / 10_000 : null,
+  })
+  const metrics = [
+    mk('sessions', cur.overview.totalSessions, prev.overview.totalSessions),
+    mk('turns', cur.overview.totalTurns, prev.overview.totalTurns),
+    mk('toolCalls', cur.overview.totalToolCalls, prev.overview.totalToolCalls),
+    mk('activeDays', cur.overview.activeDays, prev.overview.activeDays),
+  ]
+  if (cur.overview.tokens && prev.overview.tokens) {
+    metrics.push(
+      mk(
+        'tokens',
+        cur.overview.tokens.input + cur.overview.tokens.output,
+        prev.overview.tokens.input + prev.overview.tokens.output,
+      ),
+    )
+  }
+  return metrics
+}
+
 /** CLI 主入口；返回进程退出码 */
 export async function runCli(argv: string[]): Promise<number> {
   let opts: CliOptions
@@ -204,6 +236,13 @@ export async function runCli(argv: string[]): Promise<number> {
   // 年度模式：等价于该年 1-1 ~ 12-31；与 --since/--until 互斥
   let yearMode: number | undefined
   try {
+    if (opts.compare) {
+      // 年度对比必须基于年度范围；未指定 --year 时默认当前年份
+      if (opts.since !== undefined || opts.until !== undefined) {
+        console.error('✖ --compare 不能与 --since / --until 同时使用（年度对比基于整年范围）')
+        return 1
+      }
+    }
     if (opts.year !== undefined) {
       if (opts.since !== undefined || opts.until !== undefined) {
         console.error('✖ --year 不能与 --since / --until 同时使用')
@@ -213,6 +252,10 @@ export async function runCli(argv: string[]): Promise<number> {
         throw new Error(`无效的 --year 值: "${opts.year}"（应为 1970-2100 的四位数年份）`)
       }
       yearMode = Number(opts.year)
+      since = parseDateArg(`${yearMode}-01-01`, '--year', true)
+      until = parseDateArg(`${yearMode}-12-31`, '--year', false)
+    } else if (opts.compare) {
+      yearMode = new Date().getFullYear()
       since = parseDateArg(`${yearMode}-01-01`, '--year', true)
       until = parseDateArg(`${yearMode}-12-31`, '--year', false)
     }
@@ -333,6 +376,25 @@ export async function runCli(argv: string[]): Promise<number> {
       report.costEstimate = estimateCost(report.overview.tokens)
     } else {
       console.log('ℹ️ 已跳过成本估算：本批会话缺少 token 用量记录')
+    }
+  }
+
+  // 年度对比：--compare 开启时对上一年再聚合一次（events 已全量在内存，零解析成本）
+  if (opts.compare && yearMode !== undefined) {
+    const prevYear = yearMode - 1
+    const prevReport = aggregate(events, {
+      includeSubagents: opts.includeSubagents,
+      since: parseDateArg(`${prevYear}-01-01`, '--year', true),
+      until: parseDateArg(`${prevYear}-12-31`, '--year', false),
+    })
+    if (prevReport.overview.totalSessions === 0) {
+      console.log(`ℹ️ 已跳过年度对比：${prevYear} 年没有会话数据`)
+    } else {
+      report.yearComparison = {
+        currentYear: yearMode,
+        previousYear: prevYear,
+        metrics: buildCompareMetrics(report, prevReport),
+      }
     }
   }
 

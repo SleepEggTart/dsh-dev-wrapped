@@ -57,6 +57,7 @@ const baseReport: DevWrappedReport = {
   topSessions: [
     { id: 's1', workspace: 'D:\\proj', createdAt: new Date(2026, 7, 20).getTime(), turns: 80, toolCalls: 900, topTools: ['Read'] },
   ],
+  badges: [],
 }
 
 describe('toStoryReport 结构', () => {
@@ -107,6 +108,56 @@ describe('toStoryReport 结构', () => {
   it('tokens 存在且未开启估算时展示 token 总量屏', () => {
     expect(html).toContain('输入')
     expect(html).not.toContain('成本估算')
+  })
+})
+
+describe('toStoryReport v1.1.0 徽章屏与年度对比屏', () => {
+  it('达成徽章渲染徽章墙，未达成不渲染', () => {
+    const report: DevWrappedReport = {
+      ...baseReport,
+      badges: [
+        { id: 'night-owl', earned: true, value: 23 },
+        { id: 'late-night', earned: false, value: 0.046 },
+      ],
+    }
+    const html = toStoryReport(report)
+    expect(html).toContain('badge-grid')
+    expect(html).toContain('夜猫子')
+    expect(html).toContain('解锁 1 / 2')
+    // 未达成徽章不出现
+    expect(html).not.toContain('深夜代码手')
+  })
+
+  it('无达成徽章时跳过徽章屏', () => {
+    const report: DevWrappedReport = {
+      ...baseReport,
+      badges: [{ id: 'late-night', earned: false, value: 0.046 }],
+    }
+    const html = toStoryReport(report)
+    // badgesTitle 只出现在徽章屏内容中（CSS 不含该文案）
+    expect(html).not.toContain('成就徽章')
+  })
+
+  it('yearComparison 存在时渲染对比屏（含涨跌与全新起步）', () => {
+    const report: DevWrappedReport = {
+      ...baseReport,
+      yearComparison: {
+        currentYear: 2026,
+        previousYear: 2025,
+        metrics: [
+          { key: 'sessions', current: 44, previous: 20, delta: 1.2 },
+          { key: 'toolCalls', current: 2009, previous: 1800, delta: 0.1161 },
+          { key: 'turns', current: 100, previous: 0, delta: null },
+        ],
+      },
+    }
+    const html = toStoryReport(report)
+    expect(html).toContain('cmp-list')
+    expect(html).toContain('2026 vs 2025')
+    expect(html).toContain('+120%')
+    expect(html).toContain('全新起步')
+    // 无 yearComparison 时不渲染（compareTitle 只出现在对比屏内容中）
+    expect(toStoryReport(baseReport)).not.toContain('年度成长')
   })
 })
 
