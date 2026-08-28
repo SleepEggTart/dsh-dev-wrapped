@@ -1,6 +1,6 @@
 # dsh-dev-wrapped 产品需求文档（PRD）
 
-> 版本：v1.1.0 ｜ 更新日期：2026-08-28 ｜ 状态：持续迭代
+> 版本：v1.1.0 ｜ 更新日期：2026-08-28 ｜ 状态：v1.1.0 已发布，持续迭代
 
 ## 1. 产品概述
 
@@ -109,16 +109,15 @@ DSH 插件市场 5870 个插件中，"用量/成本/余额仪表盘"是红海（
 - 展示：story 新增"同比成长"一屏（涨跌箭头 + 百分比）；compact 新增对比小节；JSON 含 `yearComparison`
 - 涨跌文案中性化（"+37%"而非"进步/退步"），避免数据小导致负面体验
 
-### 4.3 交付物
+### 4.3 交付物（已全部完成，v1.1.0 已发布）
 
-- [ ] `src/types.ts`：`Badge`、`YearComparison` 类型
-- [ ] `src/badges.ts`：徽章定义与计算（纯函数）
-- [ ] `src/stats/index.ts` 或 CLI 层：双年聚合
-- [ ] `src/cli.ts`：`--compare` 参数
-- [ ] `src/i18n.ts`：徽章名/描述、对比文案（中英）
-- [ ] `src/report/story.ts` / `html.ts`：渲染
-- [ ] 单测（徽章阈值边界、对比计算）+ 真实数据端到端
-- [ ] README、CHANGELOG、版本号 1.1.0
+- [x] `src/types.ts`：`Badge`、`YearComparison` 类型
+- [x] `src/badges.ts`：徽章定义与计算（纯函数）
+- [x] `src/cli.ts`：`--compare` 参数 + 双年聚合（`buildCompareMetrics`）
+- [x] `src/i18n.ts`：徽章名/描述、对比文案（中英）
+- [x] `src/report/story.ts`（徽章墙 + 年度成长屏）/ `html.ts`（徽章小节 + 对比表格）
+- [x] 单测 140/140（徽章阈值边界 10 个 + 渲染 3 个）+ 真实数据端到端（7/11 徽章达成）
+- [x] README、CHANGELOG、版本号 1.1.0，tag v1.1.0 已推送
 
 ## 5. 后续路线图（v1.2+，未排期）
 

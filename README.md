@@ -150,13 +150,15 @@ dsh-dev-wrapped --year 2026 --compare
 | 模型分布 | 按去重后的 assistant 消息条数计（`source.model` 聚合） |
 | agentPreset | DSH 主会话的 `agentPreset` 分布；非 DSH 数据源为空数组 |
 | 成本估算 | `--estimate-cost` 显式开启时，按 DeepSeek deepseek-chat 公开单价（输入 ¥2/M、输出 ¥8/M）乘以**真实** token 计算；卡片上标注"估算"；token 缺失时跳过 |
+| 成就徽章 | 基于报告统计纯函数计算（阈值见 `src/badges.ts`）；无达成徽章时报告显示鼓励文案 |
+| 年度对比 | `--compare` 对比该年与上一年同口径聚合；上一年无数据时自动跳过；上一年为 0 且本年 > 0 时显示"全新起步"（不计算百分比） |
 
 ## 开发
 
 ```bash
 pnpm install     # 安装依赖
 pnpm build       # TypeScript 编译到 dist/
-pnpm test        # vitest 单测（126 个用例，含 fuzz 容错测试）
+pnpm test        # vitest 单测（140 个用例，含 fuzz 容错测试）
 node bin/dsh-dev-wrapped.mjs   # 本地运行 CLI
 ```
 
@@ -172,6 +174,7 @@ src/
 │   ├── dsh.ts         # DSH 适配器：扫描 + 事件映射
 │   └── claude-code.ts # Claude Code 适配器（~/.claude/projects JSONL）
 ├── tools.ts           # 工具分类映射（大小写不敏感，多适配器复用）
+├── badges.ts          # 成就徽章定义与计算（纯函数，11 枚徽章）
 ├── stats/
 │   └── index.ts       # 统计聚合（口径收敛于此）
 ├── report/
@@ -185,6 +188,7 @@ src/
 └── index.ts           # Cordis 插件壳 + 库导出
 __tests__/             # vitest 单测（含 fuzz 容错测试）
 bin/dsh-dev-wrapped.mjs  # CLI 入口
+docs/PRD.md            # 产品需求文档（定位 / 竞品调研 / 迭代路线）
 ```
 
 ### 库使用
