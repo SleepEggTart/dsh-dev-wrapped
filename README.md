@@ -35,8 +35,11 @@ JSON 数据 + 深色渐变 HTML 报告卡片
 方式一：DSH 插件安装（推荐）：
 
 ```bash
-dsh plugin add github:SleepEggTart/dsh-dev-wrapped
+dsh plugin --profile <你的profile名> add github:SleepEggTart/dsh-dev-wrapped
+# 例如：dsh plugin --profile web add github:SleepEggTart/dsh-dev-wrapped
 ```
+
+> 若提示 pnpm 拦截构建脚本（allowBuilds）：按提示把 `pnpm-workspace.yaml` 中新增的键值改为 `true`，再重新执行安装命令。
 
 安装后在 DSH 对话框输入斜杠命令即可：
 
