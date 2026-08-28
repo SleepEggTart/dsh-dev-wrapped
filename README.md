@@ -36,8 +36,17 @@ JSON 数据 + 深色渐变 HTML 报告卡片
 
 ```bash
 dsh plugin add github:SleepEggTart/dsh-dev-wrapped
-dev.wrapped
 ```
+
+安装后在 DSH 对话框输入斜杠命令即可：
+
+```
+/wrapped                    # 生成报告（默认 DSH 数据源）
+/wrapped --adapter all      # 合并 DSH + Claude Code
+/wrapped --year 2026 --compare --compact
+```
+
+`/wrapped` 的参数与 CLI 完全一致；旧版 `dev.wrapped` 命令在无斜杠命令服务的环境自动兜底。
 
 方式二：克隆仓库本地运行（npm 包暂未发布，`npx dsh-dev-wrapped` 暂不可用）：
 

@@ -1,5 +1,12 @@
 # dsh-dev-wrapped
 
+## 1.3.1
+
+### Patch Changes
+
+- DSH 斜杠命令：对话框输入 `/wrapped [选项]` 直接生成报告（基于 DSH 官方 `ctx.commands` 服务，结果在 UI 直接渲染、不进模型上下文）；参数与 CLI 完全一致，如 `/wrapped --adapter all`
+- 无斜杠命令服务的环境自动回退传统 `dev.wrapped` 命令；两者皆无时安全跳过
+
 ## 1.3.0
 
 ### Minor Changes
