@@ -1,5 +1,11 @@
 # dsh-dev-wrapped
 
+## 1.3.2
+
+### Patch Changes
+
+- 修复 git 托管安装（`dsh plugin add github:...`）后插件无法加载的问题：package.json 新增 `prepare` 脚本，安装时现场构建 `dist/`（此前 git 安装不产出 dist，DSH 加载 `dist/index.js` 失败）
+
 ## 1.3.1
 
 ### Patch Changes
