@@ -282,11 +282,14 @@ export function toStoryReport(report: DevWrappedReport, lang: Lang = 'zh'): stri
   }
 
   // 尾屏
+  // 总结页文件名：与 CLI 写入的 companion compact 文件保持一致（同目录相对链接）
+  const summaryHref = `${reportBaseName(report)}-compact.html`
   screens.push(
     screen(`
       <p class="lead">${t(lang, 'storyFinalLead', { n: overview.activeDays })}</p>
       <div class="big">${fmt(overview.activeDays)}</div>
       <p class="tail">${t(lang, 'storyFinalSub')}</p>
+      <a class="btn-summary" href="${summaryHref}">📊 ${t(lang, 'viewSummary')}</a>
       <footer>
         ${t(lang, 'footerGeneratedBy')} · ${t(lang, 'footerDataFrom', { source: dataSource })}<br>
         ${fmtDateTime(report.generatedAt)}
@@ -347,6 +350,16 @@ export function toStoryReport(report: DevWrappedReport, lang: Lang = 'zh'): stri
   .big.tool { font-family: "JetBrains Mono", "Fira Code", Consolas, monospace; font-size: clamp(2.4rem, 9vw, 5rem); word-break: break-word; }
   .big.small-text { font-size: clamp(1.4rem, 5.5vw, 3rem); word-break: break-all; }
   .tail { margin-top: 14px; font-size: clamp(1rem, 3vw, 1.3rem); color: var(--text); }
+  /* v1.2.2 总结页跳转按钮（尾屏） */
+  .btn-summary {
+    display: inline-block; margin-top: 26px; padding: 12px 28px;
+    border-radius: 999px; text-decoration: none; font-weight: 700;
+    font-size: clamp(.95rem, 2.8vw, 1.1rem);
+    color: #fff; background: linear-gradient(90deg, #7c6cff, #4ecdc4);
+    box-shadow: 0 4px 24px rgba(124,108,255,.4);
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .btn-summary:hover { transform: translateY(-2px); box-shadow: 0 6px 30px rgba(124,108,255,.55); }
   .note { margin-top: 12px; font-size: .8rem; color: var(--muted); }
   footer { margin-top: 40px; font-size: .78rem; color: var(--muted); line-height: 1.8; }
 

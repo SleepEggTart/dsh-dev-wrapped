@@ -499,12 +499,19 @@ export async function runCli(argv: string[]): Promise<number> {
   // ---------- 落盘 ----------
   if (!opts.json) {
     // 默认逐屏滚动叙事模式；--compact 输出紧凑单页
-    const htmlPath = opts.compact
-      ? await writeHtmlReport(report, outputDir, lang)
-      : await writeStoryReport(report, outputDir, lang)
-    const absHtml = path.resolve(htmlPath)
-    console.log(`📄 报告已保存: ${absHtml}${opts.compact ? '' : '（story 模式，--compact 可切换单页）'}`)
-    // 自动用默认浏览器打开 HTML 报告
+    // story 模式同时附带一份 compact 总结页（尾屏按钮跳转用）
+    let mainPath: string
+    if (opts.compact) {
+      mainPath = await writeHtmlReport(report, outputDir, lang)
+      console.log(`📄 报告已保存: ${path.resolve(mainPath)}（compact 单页模式）`)
+    } else {
+      mainPath = await writeStoryReport(report, outputDir, lang)
+      const compactPath = await writeHtmlReport(report, outputDir, lang, '-compact')
+      console.log(`📄 报告已保存: ${path.resolve(mainPath)}（story 模式）`)
+      console.log(`📄 总结页:     ${path.resolve(compactPath)}（完整数据单页）`)
+    }
+    // 自动用默认浏览器打开主报告
+    const absHtml = path.resolve(mainPath)
     const openCmd = process.platform === 'win32' ? 'start ""' : process.platform === 'darwin' ? 'open' : 'xdg-open'
     exec(`${openCmd} "${absHtml}"`, (err) => {
       if (err) console.error(`⚠ 无法自动打开浏览器: ${err.message}`)

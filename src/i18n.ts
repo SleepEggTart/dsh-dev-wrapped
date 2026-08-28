@@ -105,6 +105,7 @@ const zh = {
   storyUnstableToolSub: '{errors} 次失败 / 共 {calls} 次调用（错误率 {rate}%）',
   storyFinalLead: '你在 {n} 个日子里与 AI 并肩作战',
   storyFinalSub: '期待下一段旅程 ✨',
+  viewSummary: '查看完整数据总结',
   /* ---------- v1.1.0：成就徽章 ---------- */
   badgesTitle: '🏅 成就徽章',
   badgesSub: '解锁 {n} / {total} 枚',
@@ -259,6 +260,7 @@ const en: Record<keyof typeof zh, string> = {
   storyUnstableToolSub: '{errors} failures / {calls} calls ({rate}% error rate)',
   storyFinalLead: 'You coded with AI on {n} days',
   storyFinalSub: 'See you next journey ✨',
+  viewSummary: 'View Full Summary',
   /* ---------- v1.1.0：成就徽章 ---------- */
   badgesTitle: '🏅 Achievements',
   badgesSub: '{n} / {total} unlocked',

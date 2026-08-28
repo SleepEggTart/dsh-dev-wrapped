@@ -1,5 +1,12 @@
 # dsh-dev-wrapped
 
+## 1.2.2
+
+### Patch Changes
+
+- story 报告尾屏新增「📊 查看完整数据总结」按钮：同一次运行自动附带一份 compact 总结页（`*-compact.html`），点击直达完整数据单页
+- 终端输出同步提示总结页路径；`--compact` / `--json` 模式行为不变
+
 ## 1.2.1
 
 ### Patch Changes

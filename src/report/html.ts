@@ -484,9 +484,11 @@ export async function writeHtmlReport(
   report: DevWrappedReport,
   outputDir: string,
   lang: Lang = 'zh',
+  /** 文件名后缀（如 '-compact'；story 模式附带的总结页用，避免覆盖主报告） */
+  fileSuffix = '',
 ): Promise<string> {
   await fs.mkdir(outputDir, { recursive: true })
-  const filePath = path.join(outputDir, `${reportBaseName(report)}.html`)
+  const filePath = path.join(outputDir, `${reportBaseName(report)}${fileSuffix}.html`)
   await fs.writeFile(filePath, toHtmlReport(report, lang), 'utf8')
   return filePath
 }
