@@ -20,7 +20,7 @@ import type { DevWrappedReport, NormalizedEvent, SessionAdapter, YearCompareMetr
 const USAGE = `用法: dsh-dev-wrapped [选项]
 
 选项:
-  --adapter <id>           数据源适配器: dsh（默认）/ claude-code / auto（自动检测）
+  --adapter <id>           数据源适配器: dsh（默认）/ claude-code / all（合并两个数据源）/ auto（自动检测）
   --dsh-home <path>        DSH 数据目录（默认 ~/.dsh）
   --claude-home <path>     Claude Code 数据目录（默认 ~/.claude）
   --output <dir>           输出目录（默认 ./reports）
@@ -283,91 +283,114 @@ export async function runCli(argv: string[]): Promise<number> {
   const outputDir = opts.output ?? './reports'
 
   // ---------- 适配器选择 ----------
-  let adapter: SessionAdapter
-  let dataRoot: string
+  /** 待扫描的适配器 × 数据根目录组合（--adapter all 时为两个） */
+  let targets: Array<{ adapter: SessionAdapter; dataRoot: string }>
   const adapterArg = opts.adapter ?? 'dsh'
   if (adapterArg === 'dsh') {
-    adapter = new DshAdapter()
-    dataRoot = dshHome
+    targets = [{ adapter: new DshAdapter(), dataRoot: dshHome }]
   } else if (adapterArg === 'claude-code') {
-    adapter = new ClaudeCodeAdapter()
-    dataRoot = claudeHome
+    targets = [{ adapter: new ClaudeCodeAdapter(), dataRoot: claudeHome }]
+  } else if (adapterArg === 'all') {
+    // 跨数据源合并：两个适配器同时扫描，事件流合并后统一聚合
+    targets = [
+      { adapter: new DshAdapter(), dataRoot: dshHome },
+      { adapter: new ClaudeCodeAdapter(), dataRoot: claudeHome },
+    ]
   } else if (adapterArg === 'auto') {
     // 自动检测：两个数据目录都存在时默认 DSH 并提示显式指定
     const hasDsh = await dirExists(path.join(dshHome, 'sessions'))
     const hasClaude = await dirExists(path.join(claudeHome, 'projects'))
     if (hasDsh && hasClaude) {
-      console.log('ℹ️ 同时检测到 DSH 与 Claude Code 数据目录，默认使用 DSH；如需扫描 Claude Code 请显式指定 --adapter claude-code')
-      adapter = new DshAdapter()
-      dataRoot = dshHome
+      console.log('ℹ️ 同时检测到 DSH 与 Claude Code 数据目录，默认使用 DSH；合并扫描请使用 --adapter all')
+      targets = [{ adapter: new DshAdapter(), dataRoot: dshHome }]
     } else if (hasClaude) {
-      adapter = new ClaudeCodeAdapter()
-      dataRoot = claudeHome
+      targets = [{ adapter: new ClaudeCodeAdapter(), dataRoot: claudeHome }]
     } else if (hasDsh) {
-      adapter = new DshAdapter()
-      dataRoot = dshHome
+      targets = [{ adapter: new DshAdapter(), dataRoot: dshHome }]
     } else {
       console.log(`📂 未找到任何会话数据（${dshHome}/sessions 与 ${claudeHome}/projects 均不存在）`)
       return 0
     }
   } else {
-    console.error(`✖ 无效的 --adapter 值: ${adapterArg}（可选 dsh / claude-code / auto）\n`)
+    console.error(`✖ 无效的 --adapter 值: ${adapterArg}（可选 dsh / claude-code / all / auto）\n`)
     console.error(USAGE)
     return 1
   }
 
-  // 适配器展示名（扫描提示用；报告标题由 reportTitle 按 yearMode/adapterId 决定）
-  const adapterLabel = adapter.id === 'claude-code' ? 'Claude Code' : 'DSH'
-
-  console.log(`🔍 扫描 ${adapterLabel} 会话数据...`)
-  const files = await adapter.scan(dataRoot)
-  if (files.length === 0) {
-    console.log(`📂 未在 ${dataRoot} 找到 ${adapterLabel} 会话数据`)
-    console.log(
-      adapter.id === 'claude-code'
-        ? '   请确认目录正确；会话通常存储在 ~/.claude/projects'
-        : '   请确认目录正确；会话通常存储在 ~/.dsh/sessions',
-    )
-    return 0
-  }
-
-  // 窥探会话头：统计主/子代理数与工作目录数（适配器未实现时跳过）
-  const headers = adapter.peekSessionHeader
-    ? await Promise.all(files.map((f) => adapter.peekSessionHeader!(f)))
-    : []
-  const valid = headers.filter((h): h is NonNullable<typeof h> => h !== null)
-  if (valid.length > 0) {
-    const mainCount = valid.filter((h) => h.origin === 'main').length
-    const subCount = valid.length - mainCount
-    const wsCount = new Set(valid.map((h) => h.cwd)).size
-    console.log(
-      `📂 发现 ${mainCount} 个主会话（另有 ${subCount} 个子代理会话，默认排除），${wsCount} 个工作目录`,
-    )
-  } else {
-    console.log(`📂 发现 ${files.length} 个会话文件（会话头不可读，将在解析时逐个确认）`)
-  }
-
-  console.log('⏳ 解析中...')
+  // ---------- 逐适配器扫描与解析 ----------
   const events: NormalizedEvent[] = []
-  for (const f of files) {
+  let scannedFiles = 0
+  for (const { adapter, dataRoot } of targets) {
+    const adapterLabel = adapter.id === 'claude-code' ? 'Claude Code' : 'DSH'
+    console.log(`🔍 扫描 ${adapterLabel} 会话数据...`)
+    let files
     try {
-      await adapter.parse(f, (e) => events.push(e))
+      files = await adapter.scan(dataRoot)
     } catch (err) {
-      if (err instanceof ZstdUnavailableError) {
-        // zstd 与 fzstd 均不可用：输出平台感知的安装指引后退出
-        console.error(`✖ ${err.message}：\n${err.installHint()}`)
-        return 1
+      // 目录不存在等情况：all 模式下跳过该数据源，单数据源模式报错退出
+      if (adapterArg === 'all') {
+        console.log(`ℹ️ 已跳过 ${adapterLabel}：${(err as Error).message}`)
+        continue
       }
-      // 单文件失败（zstd 损坏等）：警告并跳过，不中断全局
-      console.error(`⚠ 跳过无法解析的会话: ${f.filePath} — ${(err as Error).message}`)
+      throw err
     }
+    if (files.length === 0) {
+      if (adapterArg === 'all') {
+        console.log(`ℹ️ ${adapterLabel} 无会话数据，已跳过`)
+        continue
+      }
+      console.log(`📂 未在 ${dataRoot} 找到 ${adapterLabel} 会话数据`)
+      console.log(
+        adapter.id === 'claude-code'
+          ? '   请确认目录正确；会话通常存储在 ~/.claude/projects'
+          : '   请确认目录正确；会话通常存储在 ~/.dsh/sessions',
+      )
+      return 0
+    }
+
+    // 窥探会话头：统计主/子代理数与工作目录数（适配器未实现时跳过）
+    const headers = adapter.peekSessionHeader
+      ? await Promise.all(files.map((f) => adapter.peekSessionHeader!(f)))
+      : []
+    const valid = headers.filter((h): h is NonNullable<typeof h> => h !== null)
+    if (valid.length > 0) {
+      const mainCount = valid.filter((h) => h.origin === 'main').length
+      const subCount = valid.length - mainCount
+      const wsCount = new Set(valid.map((h) => h.cwd)).size
+      console.log(
+        `📂 发现 ${mainCount} 个主会话（另有 ${subCount} 个子代理会话，默认排除），${wsCount} 个工作目录`,
+      )
+    } else {
+      console.log(`📂 发现 ${files.length} 个会话文件（会话头不可读，将在解析时逐个确认）`)
+    }
+
+    scannedFiles += files.length
+    console.log('⏳ 解析中...')
+    for (const f of files) {
+      try {
+        await adapter.parse(f, (e) => events.push(e))
+      } catch (err) {
+        if (err instanceof ZstdUnavailableError) {
+          // zstd 与 fzstd 均不可用：输出平台感知的安装指引后退出
+          console.error(`✖ ${err.message}：\n${err.installHint()}`)
+          return 1
+        }
+        // 单文件失败（zstd 损坏等）：警告并跳过，不中断全局
+        console.error(`⚠ 跳过无法解析的会话: ${f.filePath} — ${(err as Error).message}`)
+      }
+    }
+  }
+  if (scannedFiles === 0) {
+    console.log('📂 所有数据源均无会话数据')
+    return 0
   }
 
   console.log('📊 生成报告...')
   const report = aggregate(events, { includeSubagents: opts.includeSubagents, since, until })
   // 数据根目录、适配器标识与年度模式由 CLI 层覆盖（aggregate 默认按 DSH 填充）
-  report.dshHome = dataRoot
-  report.adapterId = adapter.id
+  // all 模式 adapterId 用 'all' 标识（reportTitle 据此显示合并标题），dshHome 取第一个数据根
+  report.dshHome = targets[0].dataRoot
+  report.adapterId = adapterArg === 'all' ? 'all' : targets[0].adapter.id
   if (yearMode !== undefined) report.yearMode = yearMode
 
   // 成本估算：显式开启且 tokens 完整时计算（tokens 缺失则提示跳过，绝不估算 token）

@@ -12,6 +12,7 @@ import type { Badge, DevWrappedReport } from '../types.js'
 import type { Lang } from '../i18n.js'
 import { t, compareMetricKey } from '../i18n.js'
 import { BADGE_ICONS, badgeNameKey, badgeDescKey } from '../badges.js'
+import { PERSONALITY_ICONS, personalityNameKey, personalityDescKey } from '../personality.js'
 import { DEEPSEEK_PRICING, fmtCost } from '../cost.js'
 import { esc, fmt, fmtDuration, fmtTokens, fmtDateTime } from './format.js'
 import { localDateKey, reportBaseName } from './json.js'
@@ -129,6 +130,42 @@ function renderToolStability(report: DevWrappedReport, lang: Lang): string {
     </section>`
 }
 
+/** 开发者人格小节（v1.2.0：personality 非空才渲染） */
+function renderPersonality(report: DevWrappedReport, lang: Lang): string {
+  const p = report.personality
+  if (!p) return ''
+  const icon = PERSONALITY_ICONS[p.id] ?? '🧑‍💻'
+  return `
+    <section class="card personality-card">
+      <h2>${t(lang, 'personalityTitle')}</h2>
+      <div class="personality-row">
+        <span class="p-big-icon">${icon}</span>
+        <span class="p-txt">
+          <b class="p-name">${esc(t(lang, personalityNameKey(p.id) as never))}</b>
+          <small class="p-desc">${esc(t(lang, personalityDescKey(p.id) as never))}</small>
+        </span>
+      </div>
+    </section>`
+}
+
+/** 数据源分布小节（v1.2.0：--adapter all 多数据源才渲染） */
+function renderSourceDist(report: DevWrappedReport, lang: Lang): string {
+  if (report.adapterSources.length <= 1) return ''
+  const total = report.adapterSources.reduce((a, b) => a + b.sessions, 0)
+  const rows = report.adapterSources
+    .map((s) => {
+      const label = s.source === 'claude-code' ? 'sourceClaudeCode' : 'sourceDsh'
+      const pct = total > 0 ? Math.round((s.sessions / total) * 100) : 0
+      return `<div class="src-row"><span class="src-label">${t(lang, label as never)}</span><span class="src-bar"><span class="src-fill" style="width:${pct}%"></span></span><span class="src-num">${fmt(s.sessions)} · ${pct}%</span></div>`
+    })
+    .join('')
+  return `
+    <section class="card">
+      <h2>${t(lang, 'sourceDistTitle')}<span class="sub">${t(lang, 'sourceDistSub', { n: report.adapterSources.length })}</span></h2>
+      <div class="src-list">${rows}</div>
+    </section>`
+}
+
 /** 徽章小节（v1.1.0：compact 模式，展示达成的徽章及达成条件描述） */
 function renderBadges(report: DevWrappedReport, lang: Lang): string {
   const earned = report.badges.filter((b) => b.earned)
@@ -210,7 +247,14 @@ export function toHtmlReport(report: DevWrappedReport, lang: Lang = 'zh'): strin
     lang,
     'footerDataFrom',
     {
-      source: t(lang, report.adapterId === 'claude-code' ? 'dataSourceClaude' : 'dataSourceDsh'),
+      source: t(
+        lang,
+        report.adapterId === 'claude-code'
+          ? 'dataSourceClaude'
+          : report.adapterId === 'all'
+            ? 'dataSourceAll'
+            : 'dataSourceDsh',
+      ),
     },
   )
   // 成本估算（显式开启且 tokens 完整时有值；必须带"估算"标注）
@@ -318,6 +362,19 @@ export function toHtmlReport(report: DevWrappedReport, lang: Lang = 'zh'): strin
   .delta.down { color: #ff9e9e; }
   .delta.new { color: #ffd479; }
 
+  /* v1.2.0 人格与数据源分布 */
+  .personality-row { display: flex; align-items: center; gap: 16px; }
+  .p-big-icon { font-size: 2.6rem; line-height: 1; }
+  .p-txt { display: flex; flex-direction: column; }
+  .p-name { font-size: 1.2rem; }
+  .p-desc { color: var(--muted); font-size: .8rem; margin-top: 4px; }
+  .src-list { display: flex; flex-direction: column; gap: 8px; }
+  .src-row { display: flex; align-items: center; gap: 12px; }
+  .src-label { min-width: 110px; }
+  .src-bar { flex: 1; height: 8px; background: rgba(255,255,255,.12); border-radius: 4px; overflow: hidden; }
+  .src-fill { display: block; height: 100%; background: linear-gradient(90deg, #7c6cff, #4ecdc4); }
+  .src-num { min-width: 110px; text-align: right; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+
   @media (max-width: 640px) {
     .bar-row { grid-template-columns: 20px 90px 1fr 54px; font-size: .8rem; }
     .hours { gap: 2px; }
@@ -401,6 +458,8 @@ export function toHtmlReport(report: DevWrappedReport, lang: Lang = 'zh'): strin
     </div>
   </section>
 
+  ${renderPersonality(report, lang)}
+
   ${renderBadges(report, lang)}
 
   ${renderToolStability(report, lang)}
@@ -408,6 +467,8 @@ export function toHtmlReport(report: DevWrappedReport, lang: Lang = 'zh'): strin
   ${renderTopSessions(report, lang)}
 
   ${renderYearComparison(report, lang)}
+
+  ${renderSourceDist(report, lang)}
 
   <footer>
     ${t(lang, 'footerGeneratedBy')} · ${dataSourceText}<br>

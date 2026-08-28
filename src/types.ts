@@ -18,6 +18,8 @@ export type NormalizedEvent =
       cwd: string
       origin: SessionOrigin
       agentPreset?: string
+      /** 数据源标识（'dsh' / 'claude-code'；--adapter all 合并统计时区分会话归属） */
+      source?: string
     }
   | { kind: 'turn-start'; sessionId: string; turn: number; time: number }
   | {
@@ -163,6 +165,24 @@ export interface Badge {
   value: number
 }
 
+/** 数据源分布（v1.2.0：--adapter all 合并报告时按会话归属统计） */
+export interface AdapterSourceStat {
+  /** 数据源标识：'dsh' / 'claude-code' */
+  source: string
+  /** 该数据源的主会话数 */
+  sessions: number
+}
+
+/** 开发者人格画像（v1.2.0：作息 × 风格两维组合，纯本地规则计算） */
+export interface Personality {
+  /** 人格标识（i18n 文案 key，如 'night-architect'） */
+  id: string
+  /** 作息维度：night（峰值 20-5 点）/ day（6-12）/ evening（12-19） */
+  rhythm: 'night' | 'day' | 'evening'
+  /** 风格维度：heavy（轮均工具调用 ≥ 8）/ light */
+  style: 'heavy' | 'light'
+}
+
 /** 年度对比单指标（v1.1.0：--compare 双年聚合） */
 export interface YearCompareMetric {
   /** 指标识：sessions / turns / toolCalls / activeDays / tokens */
@@ -250,4 +270,8 @@ export interface DevWrappedReport {
   badges: Array<Badge>
   /** 年度对比（v1.1.0：--compare 开启且上一年有数据时才有值） */
   yearComparison?: YearComparison
+  /** 数据源分布（v1.2.0：--adapter all 时按会话归属统计；单数据源为单元素数组） */
+  adapterSources: Array<AdapterSourceStat>
+  /** 开发者人格画像（v1.2.0：工具调用总数 > 0 时计算，否则为 null） */
+  personality: Personality | null
 }

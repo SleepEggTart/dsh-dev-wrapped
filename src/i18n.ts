@@ -80,6 +80,7 @@ const zh = {
   footerDataFrom: '数据 100% 来自本地{source}会话记录',
   dataSourceDsh: 'DSH',
   dataSourceClaude: 'Claude Code',
+  dataSourceAll: 'DSH + Claude Code',
   /* ---------- story 叙事屏 ---------- */
   storyScrollHint: '向下滚动开启回顾 ↓',
   storySessionsLead: '这段时间你开启了',
@@ -139,6 +140,25 @@ const zh = {
   compareActiveDays: '活跃天数',
   compareTokens: 'Token',
   compareNewStart: '全新起步',
+  /* ---------- v1.2.0：开发者人格 ---------- */
+  personalityTitle: '你的开发者人格',
+  personalityNightArchitect: '午夜建筑师',
+  personalityNightArchitectDesc: '夜色是你的专注时段，重型工具链是你的画笔',
+  personalityMoonlightConversationalist: '月下对话者',
+  personalityMoonlightConversationalistDesc: '深夜与 AI 深谈，用对话而非堆砌工具解决问题',
+  personalityDawnCommander: '晨光指挥官',
+  personalityDawnCommanderDesc: '清晨进入状态，指挥工具大军高效推进',
+  personalityMorningTeaTalker: '上午茶谈客',
+  personalityMorningTeaTalkerDesc: '上午的节奏属于从容的对话与思考',
+  personalityAfternoonSprinter: '高效推进器',
+  personalityAfternoonSprinterDesc: '午后火力全开，工具调用如疾风骤雨',
+  personalitySteadyCraftsman: '稳健工匠',
+  personalitySteadyCraftsmanDesc: '午后稳步打磨，以对话精雕细节',
+  /* ---------- v1.2.0：数据源分布 ---------- */
+  sourceDistTitle: '数据源分布',
+  sourceDistSub: '{n} 个数据源',
+  sourceDsh: 'DSH',
+  sourceClaudeCode: 'Claude Code',
   /* ---------- 其他 ---------- */
   empty: '—',
 }
@@ -214,6 +234,7 @@ const en: Record<keyof typeof zh, string> = {
   footerDataFrom: 'Data 100% from local {source} session logs',
   dataSourceDsh: 'DSH',
   dataSourceClaude: 'Claude Code',
+  dataSourceAll: 'DSH + Claude Code',
   /* ---------- story 叙事屏 ---------- */
   storyScrollHint: 'Scroll to start your review ↓',
   storySessionsLead: 'During this period you started',
@@ -273,6 +294,25 @@ const en: Record<keyof typeof zh, string> = {
   compareActiveDays: 'Active Days',
   compareTokens: 'Tokens',
   compareNewStart: 'Brand New',
+  /* ---------- v1.2.0：开发者人格 ---------- */
+  personalityTitle: 'Your Developer Personality',
+  personalityNightArchitect: 'Night Architect',
+  personalityNightArchitectDesc: 'The night is your focus zone, heavy tooling is your brush',
+  personalityMoonlightConversationalist: 'Moonlight Conversationalist',
+  personalityMoonlightConversationalistDesc: 'Late-night deep talks with AI — dialogue over tool spam',
+  personalityDawnCommander: 'Dawn Commander',
+  personalityDawnCommanderDesc: 'You hit your stride at sunrise, commanding an army of tools',
+  personalityMorningTeaTalker: 'Morning Tea Talker',
+  personalityMorningTeaTalkerDesc: 'Mornings belong to unhurried conversation and thinking',
+  personalityAfternoonSprinter: 'Afternoon Sprinter',
+  personalityAfternoonSprinterDesc: 'Full throttle after noon — tool calls like a storm',
+  personalitySteadyCraftsman: 'Steady Craftsman',
+  personalitySteadyCraftsmanDesc: 'Afternoons spent polishing steadily, refining details through dialogue',
+  /* ---------- v1.2.0：数据源分布 ---------- */
+  sourceDistTitle: 'Data Sources',
+  sourceDistSub: '{n} source(s)',
+  sourceDsh: 'DSH',
+  sourceClaudeCode: 'Claude Code',
   /* ---------- 其他 ---------- */
   empty: '—',
 }

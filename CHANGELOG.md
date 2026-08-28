@@ -1,5 +1,12 @@
 # dsh-dev-wrapped
 
+## 1.2.0
+
+### Minor Changes
+
+- 跨数据源合并报告：`--adapter all` 同时扫描 DSH 与 Claude Code 会话，事件流合并统一聚合；新增数据源分布统计（`adapterSources`，story 数据源分布屏 + compact 小节）；任一来源缺失自动跳过不报错
+- 开发者人格画像：作息（夜 20-5 / 日 6-12 / 傍晚 13-19）× 风格（轮均工具调用 ≥ 8 为重型）组合出 6 种人格（午夜建筑师 / 月下对话者 / 晨光指挥官 / 上午茶谈客 / 高效推进器 / 稳健工匠），story 人格大屏 + compact 人格小节 + JSON `personality` 字段
+
 ## 1.1.0
 
 ### Minor Changes

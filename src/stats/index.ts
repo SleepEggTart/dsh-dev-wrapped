@@ -21,6 +21,7 @@ import type {
 } from '../types.js'
 import { toolCategory } from '../tools.js'
 import { computeBadges } from '../badges.js'
+import { computePersonality } from '../personality.js'
 
 /** 统计选项 */
 export interface StatsOptions {
@@ -55,7 +56,7 @@ export function aggregate(events: NormalizedEvent[], opts: StatsOptions = {}): D
   // ---------- 第一遍：收集 session 头，做日期过滤 ----------
   const sessionHeads = new Map<
     string,
-    { createdAt: number; cwd: string; origin: 'main' | 'subagent'; agentPreset?: string }
+    { createdAt: number; cwd: string; origin: 'main' | 'subagent'; agentPreset?: string; source?: string }
   >()
   for (const e of events) {
     if (e.kind === 'session-start') {
@@ -64,6 +65,7 @@ export function aggregate(events: NormalizedEvent[], opts: StatsOptions = {}): D
         cwd: e.cwd,
         origin: e.origin,
         ...(e.agentPreset ? { agentPreset: e.agentPreset } : {}),
+        ...(e.source ? { source: e.source } : {}),
       })
     }
   }
@@ -410,6 +412,8 @@ export function aggregate(events: NormalizedEvent[], opts: StatsOptions = {}): D
     dshHome: '', // 由 CLI 层填充
     adapterId: 'dsh',
     badges: [], // 占位，下方 computeBadges 统一填充
+    adapterSources: [], // 占位，下方聚合数据源分布
+    personality: null, // 占位，下方 computePersonality 填充
     timeRange: { start: rangeStart, end: rangeEnd, days },
     overview: {
       totalSessions,
@@ -444,5 +448,18 @@ export function aggregate(events: NormalizedEvent[], opts: StatsOptions = {}): D
   }
   // 成就徽章：报告构造完成后统一计算（badges 依赖完整报告数据）
   report.badges = computeBadges(report)
+  // 数据源分布：按保留的主会话归属统计（--adapter all 时多元素）
+  const sourceCounts = new Map<string, number>()
+  for (const id of keptSessionIds) {
+    const head = sessionHeads.get(id)!
+    if (head.origin !== 'main') continue
+    const src = head.source ?? 'dsh'
+    sourceCounts.set(src, (sourceCounts.get(src) ?? 0) + 1)
+  }
+  report.adapterSources = [...sourceCounts.entries()]
+    .map(([source, count]) => ({ source, sessions: count }))
+    .sort((a, b) => b.sessions - a.sessions)
+  // 开发者人格画像：工具调用总数 > 0 时计算
+  report.personality = computePersonality(report)
   return report
 }

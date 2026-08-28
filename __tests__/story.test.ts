@@ -58,6 +58,8 @@ const baseReport: DevWrappedReport = {
     { id: 's1', workspace: 'D:\\proj', createdAt: new Date(2026, 7, 20).getTime(), turns: 80, toolCalls: 900, topTools: ['Read'] },
   ],
   badges: [],
+  adapterSources: [{ source: 'dsh', sessions: 1 }],
+  personality: null,
 }
 
 describe('toStoryReport 结构', () => {

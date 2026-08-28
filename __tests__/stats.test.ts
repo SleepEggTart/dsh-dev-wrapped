@@ -198,3 +198,43 @@ describe('空数据与工具分类', () => {
     expect(pwsh?.category).toBe('🖥️ 命令执行')
   })
 })
+
+describe('数据源分布与人格（v1.2.0）', () => {
+  it('adapterSources：无 source 标记按 dsh 兜底，多来源分别计数', () => {
+    // 会话 A 无 source（旧数据兜底 dsh）
+    const r1 = aggregate(mainSessionA())
+    expect(r1.adapterSources).toEqual([{ source: 'dsh', sessions: 1 }])
+
+    // 会话 A + 一个 claude-code 主会话：两来源各 1
+    const claudeSid = 'cc-main'
+    const r2 = aggregate([
+      ...mainSessionA(),
+      { kind: 'session-start', sessionId: claudeSid, createdAt: ts(20, 9), cwd: 'D:\\projC', origin: 'main', source: 'claude-code' },
+      { kind: 'tool-call', sessionId: claudeSid, turn: 1, step: 1, callId: 'cc1', name: 'Read', args: {}, time: ts(20, 9) },
+    ])
+    expect(r2.adapterSources).toContainEqual({ source: 'dsh', sessions: 1 })
+    expect(r2.adapterSources).toContainEqual({ source: 'claude-code', sessions: 1 })
+    // 合并后会话总数为 2
+    expect(r2.overview.totalSessions).toBe(2)
+  })
+
+  it('adapterSources：子代理会话不计入来源统计', () => {
+    const r = aggregate([
+      ...mainSessionA(),
+      { kind: 'session-start', sessionId: 'sub-cc', createdAt: ts(20, 9), cwd: 'D:\\projC', origin: 'subagent', source: 'claude-code' },
+      { kind: 'tool-call', sessionId: 'sub-cc', turn: 1, step: 1, callId: 'sc1', name: 'Read', args: {}, time: ts(20, 9) },
+    ])
+    expect(r.adapterSources).toEqual([{ source: 'dsh', sessions: 1 }])
+  })
+
+  it('personality：有工具调用时计算，零调用为 null', () => {
+    const r = aggregate(mainSessionA())
+    // mainSessionA：峰值小时来自工具调用时间（9/10/11 点），轮均 5/3 < 8 → 日间轻型
+    expect(r.personality).not.toBeNull()
+    expect(r.personality?.rhythm).toBe('day')
+    expect(r.personality?.style).toBe('light')
+
+    const empty = aggregate([])
+    expect(empty.personality).toBeNull()
+  })
+})

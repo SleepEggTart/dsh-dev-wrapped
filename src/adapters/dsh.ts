@@ -194,6 +194,7 @@ export function mapDshLine(
       cwd,
       origin,
       ...(agentPreset ? { agentPreset } : {}),
+      source: 'dsh',
     })
     return
   }

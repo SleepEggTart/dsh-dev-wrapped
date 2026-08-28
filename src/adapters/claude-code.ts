@@ -292,6 +292,7 @@ export class ClaudeCodeAdapter implements SessionAdapter {
         createdAt: headerCreatedAt,
         cwd: headerCwd,
         origin,
+        source: 'claude-code',
       })
     }
     for (const e of events) onEvent(e)

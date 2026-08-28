@@ -35,6 +35,7 @@ describe('session 头映射', () => {
         createdAt: 1780000000000,
         cwd: 'D:\\proj',
         origin: 'main',
+        source: 'dsh',
       },
     ])
   })

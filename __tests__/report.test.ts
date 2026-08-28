@@ -44,6 +44,8 @@ const baseReport: DevWrappedReport = {
   },
   topSessions: [],
   badges: [],
+  adapterSources: [{ source: 'dsh', sessions: 1 }],
+  personality: null,
 }
 
 describe('toHtmlReport 基本渲染', () => {

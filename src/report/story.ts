@@ -13,6 +13,7 @@ import type { DevWrappedReport } from '../types.js'
 import type { Lang } from '../i18n.js'
 import { t, compareMetricKey } from '../i18n.js'
 import { BADGE_ICONS, badgeNameKey } from '../badges.js'
+import { PERSONALITY_ICONS, personalityNameKey, personalityDescKey } from '../personality.js'
 import { DEEPSEEK_PRICING, fmtCost } from '../cost.js'
 import { esc, fmt, fmtDuration, fmtTokens, fmtDateTime } from './format.js'
 import { localDateKey, reportBaseName } from './json.js'
@@ -22,6 +23,7 @@ export function reportTitle(report: DevWrappedReport, lang: Lang): string {
   if (report.yearMode !== undefined) {
     return t(lang, 'yearTitle', { year: report.yearMode })
   }
+  if (report.adapterId === 'all') return 'DSH + Claude Code Dev Wrapped'
   return report.adapterId === 'claude-code' ? 'Claude Code Dev Wrapped' : 'DSH Dev Wrapped'
 }
 
@@ -33,7 +35,11 @@ export function toStoryReport(report: DevWrappedReport, lang: Lang = 'zh'): stri
   const title = reportTitle(report, lang)
   const dataSource = t(
     lang,
-    report.adapterId === 'claude-code' ? 'dataSourceClaude' : 'dataSourceDsh',
+    report.adapterId === 'claude-code'
+      ? 'dataSourceClaude'
+      : report.adapterId === 'all'
+        ? 'dataSourceAll'
+        : 'dataSourceDsh',
   )
   const tokens = overview.tokens
 
@@ -201,6 +207,40 @@ export function toStoryReport(report: DevWrappedReport, lang: Lang = 'zh'): stri
     }
   }
 
+  // 11.5 开发者人格（v1.2.0：personality 非空才显示）
+  if (report.personality) {
+    const p = report.personality
+    screens.push(
+      screen(`
+        <p class="sub-title">${t(lang, 'personalityTitle')}</p>
+        <div class="personality">
+          <div class="p-icon">${PERSONALITY_ICONS[p.id] ?? '🧑‍💻'}</div>
+          <div class="p-name">${esc(t(lang, personalityNameKey(p.id) as never))}</div>
+          <p class="p-desc">${esc(t(lang, personalityDescKey(p.id) as never))}</p>
+        </div>
+      `),
+    )
+  }
+
+  // 11.8 数据源分布（v1.2.0：--adapter all 多数据源时显示）
+  if (report.adapterSources.length > 1) {
+    const total = report.adapterSources.reduce((a, b) => a + b.sessions, 0)
+    screens.push(
+      screen(`
+        <p class="lead">${t(lang, 'sourceDistTitle')} · ${t(lang, 'sourceDistSub', { n: report.adapterSources.length })}</p>
+        <div class="src-list">
+          ${report.adapterSources
+            .map((s) => {
+              const label = s.source === 'claude-code' ? 'sourceClaudeCode' : 'sourceDsh'
+              const pct = total > 0 ? Math.round((s.sessions / total) * 100) : 0
+              return `<div class="src-row"><span class="src-label">${t(lang, label as never)}</span><span class="src-bar"><span class="src-fill" style="width:${pct}%"></span></span><span class="src-num">${fmt(s.sessions)} · ${pct}%</span></div>`
+            })
+            .join('')}
+        </div>
+      `),
+    )
+  }
+
   // 12. 成就徽章墙（v1.1.0：有达成徽章才显示）
   const earnedBadges = report.badges.filter((b) => b.earned)
   if (earnedBadges.length > 0) {
@@ -309,6 +349,24 @@ export function toStoryReport(report: DevWrappedReport, lang: Lang = 'zh'): stri
   .tail { margin-top: 14px; font-size: clamp(1rem, 3vw, 1.3rem); color: var(--text); }
   .note { margin-top: 12px; font-size: .8rem; color: var(--muted); }
   footer { margin-top: 40px; font-size: .78rem; color: var(--muted); line-height: 1.8; }
+
+  /* v1.2.0 开发者人格 */
+  .personality { text-align: center; margin-top: 14px; }
+  .p-icon { font-size: clamp(3rem, 10vw, 4.5rem); line-height: 1.2; }
+  .p-name { margin-top: 10px; font-size: clamp(1.5rem, 5vw, 2.2rem); font-weight: 800; color: var(--text); }
+  .p-desc { margin-top: 10px; font-size: clamp(.9rem, 2.8vw, 1.05rem); color: var(--muted); max-width: 30em; }
+
+  /* v1.2.0 数据源分布 */
+  .src-list { max-width: 520px; margin: 18px auto 0; text-align: left; }
+  .src-row {
+    display: flex; align-items: center; gap: 12px; padding: 10px 4px;
+    border-bottom: 1px solid rgba(255,255,255,.1);
+    font-size: clamp(.95rem, 2.6vw, 1.1rem);
+  }
+  .src-label { min-width: 110px; color: var(--text); }
+  .src-bar { flex: 1; height: 8px; background: rgba(255,255,255,.12); border-radius: 4px; overflow: hidden; }
+  .src-fill { display: block; height: 100%; background: linear-gradient(90deg, #7c6cff, #4ecdc4); }
+  .src-num { min-width: 110px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 
   /* v1.1.0 徽章墙 */
   .badge-grid {

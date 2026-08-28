@@ -1,6 +1,6 @@
 # dsh-dev-wrapped 产品需求文档（PRD）
 
-> 版本：v1.1.0 ｜ 更新日期：2026-08-28 ｜ 状态：v1.1.0 已发布，持续迭代
+> 版本：v1.2.0 ｜ 更新日期：2026-08-28 ｜ 状态：v1.2.0 已发布，持续迭代
 
 ## 1. 产品概述
 
@@ -119,14 +119,62 @@ DSH 插件市场 5870 个插件中，"用量/成本/余额仪表盘"是红海（
 - [x] 单测 140/140（徽章阈值边界 10 个 + 渲染 3 个）+ 真实数据端到端（7/11 徽章达成）
 - [x] README、CHANGELOG、版本号 1.1.0，tag v1.1.0 已推送
 
-## 5. 后续路线图（v1.2+，未排期）
+## 5. v1.2.0 开发计划（本次迭代）
 
-- 多数据源扩展：Codex / OpenCode / Hermes 适配器（格式已被 dsh-claude-move 验证可迁移）——巩固"唯一多数据源回顾工具"定位
-- AI 生成个性化年度总结文案（需权衡零依赖原则，可做成可选 `--ai-summary` + 用户自配 API）
+### 5.1 跨数据源合并报告（--adapter all）
+
+**用户价值**：同时使用 DSH 和 Claude Code 的开发者（本产品的核心用户画像）目前只能生成两份独立报告；合并后一份报告看全貌。市场内无同类能力，是架构优势转化为产品壁垒的关键一步。
+
+**产品规则**：
+- `--adapter all`：同时实例化 DshAdapter 与 ClaudeCodeAdapter，两个数据根目录分别扫描，事件流合并后统一聚合
+- 任一数据源目录不存在：跳过并提示，只统计存在的那个（不报错）
+- 两个都存在：报告标题显示 "DSH + Claude Code Dev Wrapped"
+- 新增 `adapterSources` 统计字段：`[{ source: 'dsh', sessions: N }, { source: 'claude-code', sessions: M }]`，story/compact 渲染数据源分布小节
+- `--adapter auto` 行为保持不变（提示用户可用 all）
+- 实现注意：`NormalizedEvent` 无数据源标记，事件需在解析阶段打上 source 标签（`session-start` 头新增可选 `source` 字段），`adapterSources` 按会话归属统计
+
+### 5.2 开发者人格画像（Personality）
+
+**用户价值**：类 Spotify Listening Personality 的传播点；配合徽章系统形成"解锁+贴标签"双游戏化闭环。
+
+**产品规则**：
+- 纯本地规则计算（无 AI 调用），输入 `DevWrappedReport`，输出一个人格
+- 六种人格（两两正交维度组合）：
+
+| 维度 A（作息） | 维度 B（风格） | 人格 |
+|---|---|---|
+| 夜猫子（峰值 20-5 点） | 重型（轮均工具调用 ≥ 8） | 🌃 午夜建筑师 Night Architect |
+| 夜猫子 | 轻型（< 8） | 🌙 月下对话者 Moonlight Conversationalist |
+| 日间（峰值 6-12 点） | 重型 | 🌅 晨光指挥官 Dawn Commander |
+| 日间 | 轻型 | ☕ 上午茶谈客 Morning Tea Talker |
+| 傍晚（峰值 12-19 点） | 重型 | ⚡ 高效推进器 Afternoon Sprinter |
+| 傍晚 | 轻型 | 🌤️ 稳健工匠 Steady Craftsman |
+
+- 边界：无峰值数据时按"日间"处理；工具调用总数为 0 时不输出人格
+- 展示：story 在徽章屏之前加"人格"一屏（大图标 + 人格名 + 一句话描述）；compact 新增人格小节；JSON 含 `personality` 字段
+- 中英文案同步
+
+### 5.3 交付物（已全部完成，v1.2.0 已发布）
+
+- [x] `src/types.ts`：`AdapterSourceStat`、`Personality` 类型；`session-start` 事件新增 `source?` 字段
+- [x] `src/adapters/*`：解析时写入 source
+- [x] `src/cli.ts`：`--adapter all` 双扫描合并 + `adapterSources` 聚合
+- [x] `src/personality.ts`：人格计算纯函数
+- [x] `src/i18n.ts`：6 人格中英文名 + 描述 + 数据源分布文案
+- [x] `src/report/story.ts`（人格屏 + 数据源分布屏）/ `html.ts`（人格小节 + 数据源分布小节）
+- [x] 单测 154/154（人格维度边界 11 个 + source 聚合 3 个）+ 真实数据端到端（66 会话合并，人格"午夜建筑师"）
+- [x] README、CHANGELOG、版本号 1.2.0，tag v1.2.0
+
+## 6. 后续路线图（v1.3+，未排期）
+
+- 徽章等级（铜/银/金）与隐藏彩蛋徽章（996 警告 / 子代理奴役主）
+- AI 生成个性化年度总结文案（输出结构化 prompt 让用户贴回 AI 会话生成，零 API 成本）
+- 年度时间线回放（story 按月分屏，每月一个高光数字）
+- 分享海报模式（竖版长图单屏 HTML，手机截图直发）
+- 多数据源扩展：Codex / OpenCode / Hermes 适配器——巩固"唯一多数据源回顾工具"定位
 - npm 发布（待用户解决 2FA/passkey 问题后），打通 `npx` 与 DSH 市场主流安装方式
-- 徽章等级（铜/银/金）与隐藏彩蛋徽章
 
-## 6. 统计口径（延续 v1.0.0，不变）
+## 7. 统计口径（延续 v1.0.0，不变）
 
 - 子代理默认排除；打开开关后仅并入工具统计，不计会话总数
 - token 只累加真实 usage；缺失即整体 null，禁止估算

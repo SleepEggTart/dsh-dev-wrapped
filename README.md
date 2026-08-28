@@ -22,6 +22,8 @@ JSON 数据 + 深色渐变 HTML 报告卡片
 - **统计深化**：工具错误率排行、深夜（0-6 点）编码占比、工作日/周末分布、模型分布、DSH agentPreset 分布
 - **成就徽章**：11 枚游戏化徽章（深夜代码手 / 夜猫子 / 工具收藏家 / 周末战士 / 马拉松选手……），基于统计自动解锁
 - **年度对比**：`--compare` 对比今年与去年（会话 / 轮次 / 工具调用 / 活跃天数 / Token），展示成长曲线
+- **跨数据源合并**：`--adapter all` 同时扫描 DSH 与 Claude Code 会话，一份报告看全貌（市场内唯一）
+- **开发者人格**：作息 × 风格两维画像（午夜建筑师 / 晨光指挥官 / 稳健工匠等 6 种），自动贴标签
 - **多语言**：`--lang en` 输出英文报告卡片，方便海外分享
 - **单文件 HTML**：纯 CSS 图表（条形图 / 24h 柱状图），无外部资源，手机与桌面均美观
 - **工程完备**：GitHub Actions CI（Node 18/20/22 矩阵）+ changesets 版本管理 + fuzz 容错测试（损坏 zstd / 截断文件 / 垃圾行）
@@ -87,7 +89,7 @@ DSH 会话文件使用 zstd 压缩。工具会自动检测：
 用法: dsh-dev-wrapped [选项]
 
 选项:
-  --adapter <id>           数据源适配器: dsh（默认）/ claude-code / auto（自动检测）
+  --adapter <id>           数据源适配器: dsh（默认）/ claude-code / all（合并两个数据源）/ auto（自动检测）
   --dsh-home <path>        DSH 数据目录（默认 ~/.dsh）
   --claude-home <path>     Claude Code 数据目录（默认 ~/.claude）
   --output <dir>           输出目录（默认 ./reports）
@@ -133,6 +135,12 @@ dsh-dev-wrapped --year 2026 --estimate-cost --lang en
 dsh-dev-wrapped --year 2026 --compare
 ```
 
+示例：跨数据源合并（DSH + Claude Code 一份报告看全貌）：
+
+```bash
+dsh-dev-wrapped --adapter all
+```
+
 ## 统计口径
 
 | 口径 | 说明 |
@@ -152,13 +160,15 @@ dsh-dev-wrapped --year 2026 --compare
 | 成本估算 | `--estimate-cost` 显式开启时，按 DeepSeek deepseek-chat 公开单价（输入 ¥2/M、输出 ¥8/M）乘以**真实** token 计算；卡片上标注"估算"；token 缺失时跳过 |
 | 成就徽章 | 基于报告统计纯函数计算（阈值见 `src/badges.ts`）；无达成徽章时报告显示鼓励文案 |
 | 年度对比 | `--compare` 对比该年与上一年同口径聚合；上一年无数据时自动跳过；上一年为 0 且本年 > 0 时显示"全新起步"（不计算百分比） |
+| 跨数据源 | `--adapter all` 事件流合并统一聚合；数据源分布按主会话归属统计（子代理不计入）；单来源缺失时跳过该来源不报错 |
+| 开发者人格 | 作息（峰值小时：夜 20-5 / 日 6-12 / 傍晚 13-19）× 风格（轮均工具调用 ≥ 8 为重型）组合出 6 种人格；工具调用总数为 0 时不输出 |
 
 ## 开发
 
 ```bash
 pnpm install     # 安装依赖
 pnpm build       # TypeScript 编译到 dist/
-pnpm test        # vitest 单测（140 个用例，含 fuzz 容错测试）
+pnpm test        # vitest 单测（154 个用例，含 fuzz 容错测试）
 node bin/dsh-dev-wrapped.mjs   # 本地运行 CLI
 ```
 
@@ -175,6 +185,7 @@ src/
 │   └── claude-code.ts # Claude Code 适配器（~/.claude/projects JSONL）
 ├── tools.ts           # 工具分类映射（大小写不敏感，多适配器复用）
 ├── badges.ts          # 成就徽章定义与计算（纯函数，11 枚徽章）
+├── personality.ts     # 开发者人格画像（作息 × 风格 6 种人格）
 ├── stats/
 │   └── index.ts       # 统计聚合（口径收敛于此）
 ├── report/
