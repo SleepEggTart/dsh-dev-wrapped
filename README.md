@@ -32,14 +32,20 @@ JSON 数据 + 深色渐变 HTML 报告卡片
 
 ## 快速开始
 
-方式一：DSH 插件安装（推荐）：
+方式一：DSH 插件安装（推荐，npm 包，无需构建）：
+
+```bash
+dsh plugin --profile <你的profile名> add dsh-dev-wrapped
+# 例如：dsh plugin --profile web add dsh-dev-wrapped
+```
+
+方式二：GitHub 直装（备选）：
 
 ```bash
 dsh plugin --profile <你的profile名> add github:SleepEggTart/dsh-dev-wrapped
-# 例如：dsh plugin --profile web add github:SleepEggTart/dsh-dev-wrapped
 ```
 
-> 若提示 pnpm 拦截构建脚本（allowBuilds）：按提示把 `pnpm-workspace.yaml` 中新增的键值改为 `true`，再重新执行安装命令。
+> GitHub 直装方式若提示 pnpm 拦截构建脚本（allowBuilds）：按提示把 `pnpm-workspace.yaml` 中新增的键值改为 `true`，再重新执行安装命令。npm 包内置预构建产物，不会触发此拦截。
 
 安装后在 DSH 对话框输入斜杠命令即可：
 
@@ -51,7 +57,7 @@ dsh plugin --profile <你的profile名> add github:SleepEggTart/dsh-dev-wrapped
 
 `/wrapped` 的参数与 CLI 完全一致；旧版 `dev.wrapped` 命令在无斜杠命令服务的环境自动兜底。
 
-方式二：克隆仓库本地运行（npm 包暂未发布，`npx dsh-dev-wrapped` 暂不可用）：
+方式三：克隆仓库本地运行：
 
 ```bash
 git clone https://github.com/SleepEggTart/dsh-dev-wrapped.git
