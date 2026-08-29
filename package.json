@@ -17,6 +17,7 @@
   "files": [
     "dist",
     "bin",
+    "cordis.patch.yml",
     "README.md",
     "LICENSE"
   ],
