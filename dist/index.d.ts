@@ -40,6 +40,11 @@ export interface MinimalContext {
     };
 }
 export declare const name = "dsh-dev-wrapped";
+/**
+ * Cordis 依赖注入声明：访问 ctx.commands 必须声明，
+ * 否则 Cordis 属性代理抛 "cannot get property without inject"
+ */
+export declare const inject: string[];
 export declare const usage = "\u751F\u6210\u4F60\u7684 AI \u7F16\u7801\u5E74\u5EA6\u62A5\u544A\uFF1A\u5BF9\u8BDD\u6846\u8F93\u5165 /wrapped [\u9009\u9879]\uFF08\u9009\u9879\u4E0E CLI \u4E00\u81F4\uFF0C\u5982 /wrapped --adapter all\uFF09";
 export declare function apply(ctx: unknown): void;
 export type * from './types.js';

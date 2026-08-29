@@ -8,6 +8,11 @@
  */
 import { runCli } from './cli.js';
 export const name = 'dsh-dev-wrapped';
+/**
+ * Cordis 依赖注入声明：访问 ctx.commands 必须声明，
+ * 否则 Cordis 属性代理抛 "cannot get property without inject"
+ */
+export const inject = ['commands'];
 export const usage = '生成你的 AI 编码年度报告：对话框输入 /wrapped [选项]（选项与 CLI 一致，如 /wrapped --adapter all）';
 export function apply(ctx) {
     // 结构探测而非类型断言：宿主不是 Cordis（或版本不兼容）时安全跳过

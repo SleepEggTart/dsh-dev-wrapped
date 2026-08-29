@@ -1,5 +1,12 @@
 # dsh-dev-wrapped
 
+## 1.3.5
+
+### Patch Changes
+
+- 插件入口补充 Cordis `inject = ['commands']` 声明：访问 `ctx.commands` 前必须声明依赖，否则加载时报 `cannot get property "commands" without inject`
+- `files` 白名单补充 `cordis.patch.yml`：pnpm 按 files 字段过滤 git 依赖打包内容，此前缺失导致安装后 DSH 启动报 `ENOENT ... cordis.patch.yml`
+
 ## 1.3.4
 
 ### Patch Changes
