@@ -1,5 +1,11 @@
 # dsh-dev-wrapped
 
+## 1.3.3
+
+### Patch Changes
+
+- 分发策略修复：`dist/` 构建产物直接入库，移除 `prepare` 脚本——git 托管安装（`dsh plugin add github:...`）不再触发 pnpm 构建脚本拦截，所有用户零配置安装（此前放行 key 内嵌 commit SHA，每次发版用户都需重新改 pnpm-workspace.yaml，不可分发）
+
 ## 1.3.2
 
 ### Patch Changes
