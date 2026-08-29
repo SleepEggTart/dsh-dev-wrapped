@@ -1,5 +1,11 @@
 # dsh-dev-wrapped
 
+## 1.3.4
+
+### Patch Changes
+
+- 补充 DSH bundle 声明（`dsh.bundle.patch` + `cordis.patch.yml`）：进入 profile 的 `dsh.profile.bundles` 加载列表的插件必须在 package.json 声明该字段，此前缺失导致 DSH 启动报错 `declares no dsh.bundle`，插件无法加载
+
 ## 1.3.3
 
 ### Patch Changes

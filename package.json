@@ -1,6 +1,6 @@
 {
   "name": "dsh-dev-wrapped",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "Developer Wrapped for DeepSeek Harness — your coding journey with AI, visualized.",
   "type": "module",
   "main": "dist/index.js",
@@ -50,6 +50,11 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/SleepEggTart/dsh-dev-wrapped.git"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
   },
   "bugs": {
     "url": "https://github.com/SleepEggTart/dsh-dev-wrapped/issues"

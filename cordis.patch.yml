@@ -1,0 +1,6 @@
+# dsh-dev-wrapped bundle patch 层：
+# 把包的 main 入口（dist/index.js，host 半）插入 Cordis 插件栈。
+# 本插件无浏览器半（dsh.client），斜杠命令由 host 半通过 ctx.commands.register 注册。
+- insert:
+    - id: dsh-dev-wrapped
+      name: dsh-dev-wrapped
