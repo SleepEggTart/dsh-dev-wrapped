@@ -157,13 +157,22 @@ export class ClaudeCodeAdapter implements SessionAdapter {
     let createdAt: number | null = null
     let cwd = ''
     let count = 0
-    for await (const line of lineStream(file.filePath)) {
-      if (++count > PEEK_MAX_LINES) break
-      const rec = parseJsonlLine(line)
-      if (!isRecord(rec)) continue
-      if (createdAt === null) createdAt = parseTimestamp(rec.timestamp)
-      if (!cwd && typeof rec.cwd === 'string' && rec.cwd) cwd = rec.cwd
-      if (createdAt !== null && cwd) break
+    // Node 18 上 for await 提前 break 只关闭 readline 接口、不销毁底层流（Node 20+ 已修复），
+    // 文件句柄泄漏会在 Windows 上锁住所在目录（fs.rm 卡死/ENOTEMPTY），需显式销毁
+    const input = createReadStream(file.filePath, 'utf8')
+    const rl = readline.createInterface({ input, crlfDelay: Number.POSITIVE_INFINITY })
+    try {
+      for await (const line of rl) {
+        if (++count > PEEK_MAX_LINES) break
+        const rec = parseJsonlLine(line)
+        if (!isRecord(rec)) continue
+        if (createdAt === null) createdAt = parseTimestamp(rec.timestamp)
+        if (!cwd && typeof rec.cwd === 'string' && rec.cwd) cwd = rec.cwd
+        if (createdAt !== null && cwd) break
+      }
+    } finally {
+      rl.close()
+      input.destroy()
     }
     if (createdAt === null || !cwd) return null
     return { id: sessionId, createdAt, cwd, origin }
