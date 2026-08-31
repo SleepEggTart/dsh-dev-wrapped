@@ -62,7 +62,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await fs.rm(root, { recursive: true, force: true })
+  // Windows + Node 18 存在目录句柄延迟释放的竞态，rmdir 可能报 ENOTEMPTY，加重试兜底
+  await fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 })
 
 /** 解析全部文件并收集事件（顺序：文件按 scan 返回顺序） */
